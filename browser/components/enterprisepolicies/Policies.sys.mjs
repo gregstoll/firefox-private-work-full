@@ -482,6 +482,15 @@ export var Policies = {
     },
   },
 
+  ContentAnalysis: {
+    onBeforeUIStartup(manager, param) {
+      if ("Enabled" in param) {
+        let enabled = param.Enabled ? true : false;
+        setAndLockPref("browser.contentanalysis.enabled", enabled);
+      }
+    },
+  },
+
   Cookies: {
     onBeforeUIStartup(manager, param) {
       addAllowDenyPermissions("cookie", param.Allow, param.Block);

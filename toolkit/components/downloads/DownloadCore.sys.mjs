@@ -38,6 +38,13 @@ XPCOMUtils.defineLazyServiceGetter(
   Ci.nsIExternalHelperAppService
 );
 
+XPCOMUtils.defineLazyServiceGetter(
+  lazy,
+  "gContentAnalysis",
+  "@mozilla.org/contentanalysis;1",
+  Ci.nsIContentAnalysis
+);
+
 Integration.downloads.defineESModuleGetter(
   lazy,
   "DownloadIntegration",
@@ -471,6 +478,61 @@ Download.prototype = {
             await lazy.DownloadIntegration.shouldBlockForParentalControls(this)
           ) {
             throw new DownloadError({ becauseBlockedByParentalControls: true });
+          }
+
+          if (lazy.gContentAnalysis.isActive) {
+            let promise = lazy.gContentAnalysis.AnalyzeContentRequest({
+              analysisType: Ci.nsIContentAnalysis.FILE_DOWNLOADED,
+              filePath: this.target.path,
+              url: this.source.url,
+              // sha256Digest: not set for downloads,
+              // TODO: URLs involved in the download (empty for non-downloads).
+              // resources: make_resources();
+              resources: [],
+            });
+            if (promise) {
+              // TODO: start this as soon as we have the file
+              // metadata and wait on it as late as possible.
+              await promise.then(
+                (response) => {
+                  let finalAction = Ci.nsIContentAnalysisAcknowledgement.ALLOW;
+                  let exception = null;
+                  switch (response.action) {
+                    case Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED:
+                      // TODO: UI
+                      exception = new DownloadError({ becauseContentAnalysisFailure: true });
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.ALLOW:
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.ALLOW;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.REPORT_ONLY:
+                      // TODO: UI
+                      console.info(`Report from content analysis for ${this.source.url}`);
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.WARN:
+                      // TODO: UI
+                      console.warn(`Warning from content analysis for ${this.source.url}`);
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.WARN;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.BLOCK:
+                      // TODO: UI
+                      exception = new DownloadError({ becauseContentAnalysisBlock: true });
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.BLOCK;
+                      break;
+                  }
+                  response.Acknowledge({
+                    result: Ci.nsIContentAnalysisAcknowledgement.SUCCESS,
+                    finalAction: finalAction,
+                  });
+                  if (exception) {
+                    throw exception;
+                  }
+                },
+                (failure) => { throw new DownloadError({ becauseContentAnalysisFailure: true });
+              });
+            }
           }
 
           // We should check if we have been canceled in the meantime, after all

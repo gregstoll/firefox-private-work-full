@@ -29,6 +29,7 @@ DIRS += [
     "clearsitedata",
     "cookiebanners",
     "commandlines",
+    "contentanalysis",
     "contentprefs",
     "contextualidentity",
     "crashes",
