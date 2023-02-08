@@ -10,6 +10,7 @@
 #include "common/utils_win.h"
 
 #include "client_win.h"
+#include <iostream>
 
 namespace content_analysis {
 namespace sdk {
@@ -20,6 +21,7 @@ const DWORD kBufferSize = 4096;
 std::unique_ptr<Client> Client::Create(Config config) {
   int rc;
   auto client = std::make_unique<ClientWin>(std::move(config), &rc);
+  std::cout << rc << std::endl;
   return rc == 0 ? std::move(client) : nullptr;
 }
 
@@ -33,7 +35,10 @@ ClientWin::ClientWin(Config config, int* rc) : ClientBase(std::move(config)) {
   }
 
   pipename_ = pipename;
-  if (ConnectToPipe(pipename_, &hPipe_) != ERROR_SUCCESS) {
+  std::cout << "pipename is " << pipename_ << std::endl;
+  DWORD err = ConnectToPipe(pipename_, &hPipe_);
+  if (err != ERROR_SUCCESS) {
+    std::cout << "failed to connect to pipe!! err=" << err << std::endl;
     Shutdown();
   } else {
     *rc = 0;
@@ -89,6 +94,7 @@ int ClientWin::CancelRequests(const ContentAnalysisCancelRequests& cancel) {
 DWORD ClientWin::ConnectToPipe(const std::string& pipename, HANDLE* handle) {
   HANDLE h = INVALID_HANDLE_VALUE;
   while (h == INVALID_HANDLE_VALUE) {
+    std::cout << "ConnectToPipe:top of loop" << std::endl;
     h = CreateFileA(pipename.c_str(),
                     GENERIC_READ | GENERIC_WRITE,
                     /*shareMode=*/0,
@@ -96,17 +102,26 @@ DWORD ClientWin::ConnectToPipe(const std::string& pipename, HANDLE* handle) {
                     /*flags=*/SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
                     /*template=*/nullptr);
     if (h == INVALID_HANDLE_VALUE) {
-      if (GetLastError() != ERROR_PIPE_BUSY) {
+      std::cout << "ConnectToPipe:got invalid handle" << std::endl;
+      auto err = GetLastError();
+      if (err != ERROR_PIPE_BUSY) {
+        std::cout << "ConnectToPipe:got real error=" << err << std::endl;
         break;
       }
 
       if (!WaitNamedPipeA(pipename.c_str(), NMPWAIT_USE_DEFAULT_WAIT)) {
+        std::cout << "ConnectToPipe:got error waiting for pipe="
+                  << GetLastError() << std::endl;
         break;
       }
+      std::cout << "ConnectToPipe:got invalid handle but continuing"
+                << std::endl;
     }
   }
 
   if (h == INVALID_HANDLE_VALUE) {
+    std::cout << "ConnectToPipe:got invalid handle, finally returning"
+              << std::endl;
     return GetLastError();
   }
 
@@ -117,6 +132,8 @@ DWORD ClientWin::ConnectToPipe(const std::string& pipename, HANDLE* handle) {
                                /*maxCollectionCount=*/nullptr,
                                /*connectionTimeout=*/nullptr)) {
     DWORD err = GetLastError();
+    std::cout << "ConnectToPipe: failed to set handle state err=" << err
+              << std::endl;
     CloseHandle(h);
     return err;
   }
