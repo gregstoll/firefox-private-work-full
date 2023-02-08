@@ -68,19 +68,13 @@ static DWORD WriteMessageToPipe(HANDLE pipe, const std::string& message) {
   return err;
 }
 
-
 ContentAnalysisEventWin::ContentAnalysisEventWin(
-    HANDLE handle,
-    const BrowserInfo& browser_info,
-    ContentAnalysisRequest req)
-    : ContentAnalysisEventBase(browser_info),
-      hPipe_(handle) {
+    HANDLE handle, const BrowserInfo& browser_info, ContentAnalysisRequest req)
+    : ContentAnalysisEventBase(browser_info), hPipe_(handle) {
   *request() = std::move(req);
 }
 
-ContentAnalysisEventWin::~ContentAnalysisEventWin() {
-  Shutdown();
-}
+ContentAnalysisEventWin::~ContentAnalysisEventWin() { Shutdown(); }
 
 ResultCode ContentAnalysisEventWin::Init() {
   // TODO(rogerta): do some extra validation of the request?
@@ -91,7 +85,8 @@ ResultCode ContentAnalysisEventWin::Init() {
   response()->set_request_token(request()->request_token());
 
   // Prepare the response so that ALLOW verdicts are the default().
-  return UpdateResponse(*response(),
+  return UpdateResponse(
+      *response(),
       request()->tags_size() > 0 ? request()->tags(0) : std::string(),
       ContentAnalysisResponse::Result::SUCCESS);
 }
@@ -108,8 +103,8 @@ ResultCode ContentAnalysisEventWin::Send() {
 
   response_sent_ = true;
 
-  DWORD err = WriteMessageToPipe(hPipe_,
-                                 agent_to_chrome()->SerializeAsString());
+  DWORD err =
+      WriteMessageToPipe(hPipe_, agent_to_chrome()->SerializeAsString());
   return ErrorToResultCode(err);
 }
 
@@ -119,7 +114,7 @@ std::string ContentAnalysisEventWin::DebugString() const {
   state << "ContentAnalysisEventWin{handle=" << hPipe_;
   state << " pid=" << GetBrowserInfo().pid;
   state << " rtoken=" << GetRequest().request_token();
-  state << " sent="  << response_sent_;
+  state << " sent=" << response_sent_;
   state << "}" << std::ends;
 
   return state.str();
