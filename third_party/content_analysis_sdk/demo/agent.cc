@@ -20,7 +20,7 @@ constexpr char kPathUser[] = "path_user";
 constexpr char kPathSystem[] = "path_system";
 
 // Global app config.
-const char* path = kPathSystem;
+std::string path = kPathSystem;
 bool user_specific = false;
 unsigned long delay = 0;  // In seconds.
 std::vector<std::pair<std::string, std::regex>> toBlock;
@@ -29,6 +29,7 @@ std::vector<std::pair<std::string, std::regex>> toBlock;
 constexpr const char* kArgUserSpecific = "--user";
 constexpr const char* kArgDelaySpecific = "--delay=";
 constexpr const char* kArgToBlock = "--toblock=";
+constexpr const char* kArgPipeBaseName = "--pipename=";
 constexpr const char* kArgHelp = "--help";
 
 std::vector<std::pair<std::string, std::regex>>
@@ -44,10 +45,14 @@ ParseToBlock(const std::string toBlock) {
 }
 
 bool ParseCommandLine(int argc, char* argv[]) {
+  bool setCustomPipeName = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg.find(kArgUserSpecific) == 0) {
-      path = kPathUser;
+      if (!setCustomPipeName) {
+        // custom pipe name takes precedence over this
+        path = kPathUser;
+      }
       user_specific = true;
     } else if (arg.find(kArgDelaySpecific) == 0) {
       delay = std::stoul(arg.substr(strlen(kArgDelaySpecific)));
@@ -56,6 +61,9 @@ bool ParseCommandLine(int argc, char* argv[]) {
       }
     } else if (arg.find(kArgToBlock) == 0) {
       toBlock = ParseToBlock(arg.substr(strlen(kArgToBlock)));
+    } else if (arg.find(kArgPipeBaseName) == 0) {
+      setCustomPipeName = true;
+      path = arg.substr(strlen(kArgPipeBaseName));
     } else if (arg.find(kArgHelp) == 0) {
       return false;
     }
@@ -66,15 +74,26 @@ bool ParseCommandLine(int argc, char* argv[]) {
 
 void PrintHelp() {
   std::cout
-    << std::endl << std::endl
-    << "Usage: agent [OPTIONS]" << std::endl
-    << "A simple agent to process content analysis requests." << std::endl
-    << "Data containing the string 'block' blocks the request data from being used." << std::endl
-    << std::endl << "Options:"  << std::endl
-    << kArgUserSpecific << " : Make agent OS user specific" << std::endl
-    << kArgDelaySpecific << "<delay> : Add a delay to request processing in seconds (max 30)." << std::endl
-    << kArgToBlock << "<regex> : Regular expression matching file and text content to block." << std::endl
-    << kArgHelp << " : prints this help message" << std::endl;
+      << std::endl
+      << std::endl
+      << "Usage: agent [OPTIONS]" << std::endl
+      << "A simple agent to process content analysis requests." << std::endl
+      << "Data containing the string 'block' blocks the request data from "
+         "being used."
+      << std::endl
+      << std::endl
+      << "Options:" << std::endl
+      << kArgUserSpecific << " : Make agent OS user specific" << std::endl
+      << kArgDelaySpecific
+      << "<delay> : Add a delay to request processing in seconds (max 30)."
+      << std::endl
+      << kArgToBlock
+      << "<regex> : Regular expression matching file and text content to block."
+      << std::endl
+      << kArgPipeBaseName
+      << "<pipe name> : Pipe name (instead of 'path_system' or 'path_user')."
+      << std::endl
+      << kArgHelp << " : prints this help message" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
