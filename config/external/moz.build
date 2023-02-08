@@ -6,6 +6,12 @@
 
 external_dirs = []
 
+if CONFIG["OS_TARGET"] == "WINNT":
+    DIRS += [
+        "content_analysis_sdk",
+        "content_analysis_sdk/misbehaving_agent",
+    ]
+
 DIRS += [
     "gkcodecs",
     "lgpllibs",
