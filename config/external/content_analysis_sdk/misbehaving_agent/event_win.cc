@@ -7,11 +7,7 @@
 #include <utility>
 
 #include "event_win.h"
-
-#include "common/utils_win.h"
-
 #include "agent_utils_win.h"
-#include "scoped_print_handle_win.h"
 
 namespace content_analysis {
 namespace sdk {
@@ -24,8 +20,13 @@ static DWORD WriteMessageToPipe(HANDLE pipe, const std::string& message) {
     return ERROR_SUCCESS;
   }
 
-  internal::ScopedOverlapped overlapped;
-  if (!overlapped.is_valid()) {
+  OVERLAPPED overlapped;
+  memset(&overlapped, 0, sizeof(overlapped));
+  overlapped.hEvent = CreateEvent(/*securityAttr=*/nullptr,
+                                  /*manualReset=*/TRUE,
+                                  /*initialState=*/FALSE,
+                                  /*name=*/nullptr);
+  if (overlapped.hEvent == nullptr) {
     return GetLastError();
   }
 
@@ -34,7 +35,7 @@ static DWORD WriteMessageToPipe(HANDLE pipe, const std::string& message) {
   for (DWORD size = message.length(); size > 0;) {
     std::cout << "[demo] WriteMessageToPipe top of loop, remaing size " << size
               << std::endl;
-    if (WriteFile(pipe, cursor, size, /*written=*/nullptr, overlapped)) {
+    if (WriteFile(pipe, cursor, size, /*written=*/nullptr, &overlapped)) {
       std::cout << "[demo] WriteMessageToPipe: success" << std::endl;
       err = ERROR_SUCCESS;
       break;
@@ -49,7 +50,7 @@ static DWORD WriteMessageToPipe(HANDLE pipe, const std::string& message) {
     }
 
     DWORD written;
-    if (!GetOverlappedResult(pipe, overlapped, &written, /*wait=*/TRUE)) {
+    if (!GetOverlappedResult(pipe, &overlapped, &written, /*wait=*/TRUE)) {
       err = GetLastError();
       std::cout << "[demo] WriteMessageToPipe: returning error from "
                    "GetOverlappedREsult "
@@ -63,22 +64,17 @@ static DWORD WriteMessageToPipe(HANDLE pipe, const std::string& message) {
     size -= written;
   }
 
+  CloseHandle(overlapped.hEvent);
   return err;
 }
 
-
 ContentAnalysisEventWin::ContentAnalysisEventWin(
-    HANDLE handle,
-    const BrowserInfo& browser_info,
-    ContentAnalysisRequest req)
-    : ContentAnalysisEventBase(browser_info),
-      hPipe_(handle) {
+    HANDLE handle, const BrowserInfo& browser_info, ContentAnalysisRequest req)
+    : ContentAnalysisEventBase(browser_info), hPipe_(handle) {
   *request() = std::move(req);
 }
 
-ContentAnalysisEventWin::~ContentAnalysisEventWin() {
-  Shutdown();
-}
+ContentAnalysisEventWin::~ContentAnalysisEventWin() { Shutdown(); }
 
 ResultCode ContentAnalysisEventWin::Init() {
   // TODO(rogerta): do some extra validation of the request?
@@ -89,7 +85,8 @@ ResultCode ContentAnalysisEventWin::Init() {
   response()->set_request_token(request()->request_token());
 
   // Prepare the response so that ALLOW verdicts are the default().
-  return UpdateResponse(*response(),
+  return UpdateResponse(
+      *response(),
       request()->tags_size() > 0 ? request()->tags(0) : std::string(),
       ContentAnalysisResponse::Result::SUCCESS);
 }
@@ -106,8 +103,8 @@ ResultCode ContentAnalysisEventWin::Send() {
 
   response_sent_ = true;
 
-  DWORD err = WriteMessageToPipe(hPipe_,
-                                 agent_to_chrome()->SerializeAsString());
+  DWORD err =
+      WriteMessageToPipe(hPipe_, agent_to_chrome()->SerializeAsString());
   return ErrorToResultCode(err);
 }
 
@@ -117,7 +114,7 @@ std::string ContentAnalysisEventWin::DebugString() const {
   state << "ContentAnalysisEventWin{handle=" << hPipe_;
   state << " pid=" << GetBrowserInfo().pid;
   state << " rtoken=" << GetRequest().request_token();
-  state << " sent="  << response_sent_;
+  state << " sent=" << response_sent_;
   state << "}" << std::ends;
 
   return state.str();

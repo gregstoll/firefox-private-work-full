@@ -1,0 +1,35 @@
+if CONFIG["ENABLE_TESTS"]:
+    Program("content_analysis_sdk_agent")
+
+    DEFINES["UNICODE"] = True
+    DEFINES["GOOGLE_PROTOBUF_NO_RTTI"] = True
+    DEFINES["GOOGLE_PROTOBUF_NO_STATIC_INITIALIZER"] = True
+
+    SOURCES += [
+        "../../../third_party/content_analysis_sdk/agent/src/agent_base.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/agent_utils_win.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/agent_win.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/event_base.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/event_win.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/scoped_print_handle_base.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/scoped_print_handle_win.cc",
+        "../../../third_party/content_analysis_sdk/common/utils_win.cc",
+        "../../../third_party/content_analysis_sdk/demo/agent.cc",
+        "../../../toolkit/components/contentanalysis/content_analysis/sdk/analysis.pb.cc",
+    ]
+
+    LOCAL_INCLUDES += [
+        "../../../third_party/content_analysis_sdk",
+        "../../../third_party/content_analysis_sdk/agent/include/",
+        "../../../toolkit/components/contentanalysis",
+    ]
+
+    USE_LIBS += [
+        "../../../mozglue/build/mozglue",
+        "../../../toolkit/components/protobuf/protobuf",
+        "zlib",
+    ]
+
+    OS_LIBS += [
+        "advapi32",
+    ]

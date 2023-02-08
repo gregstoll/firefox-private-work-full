@@ -13,6 +13,7 @@
 #include "common/utils_win.h"
 
 #include "client_win.h"
+#include <iostream>
 
 namespace content_analysis {
 namespace sdk {
@@ -246,6 +247,7 @@ bool WriteMessageToPipe(
 std::unique_ptr<Client> Client::Create(Config config) {
   int rc;
   auto client = std::make_unique<ClientWin>(std::move(config), &rc);
+  std::cout << rc << std::endl;
   return rc == 0 ? std::move(client) : nullptr;
 }
 
@@ -270,7 +272,9 @@ ClientWin::ClientWin(Config config, int* rc) : ClientBase(std::move(config)) {
     }
   }
 
+  std::cout << "pipename is " << pipename << std::endl;
   if (*rc != 0) {
+    std::cout << "failed to connect to pipe!! rc=" << *rc << std::endl;
     Shutdown();
   }
 }
@@ -380,24 +384,32 @@ DWORD ClientWin::ConnectToPipe(const std::string& pipename, HANDLE* handle) {
   HANDLE h = INVALID_HANDLE_VALUE;
   NTSTATUS sts = STATUS_IO_TIMEOUT;
   while (sts == STATUS_IO_TIMEOUT) {
+    std::cout << "ConnectToPipe:top of loop" << std::endl;
     sts = fnNtCreateFile(&h, GENERIC_READ | GENERIC_WRITE |
         SYNCHRONIZE, &attr, &io, /*AllocationSize=*/nullptr,
         FILE_ATTRIBUTE_NORMAL, /*ShareAccess=*/0, FILE_OPEN,
         FILE_NON_DIRECTORY_FILE,
         /*EaBuffer=*/nullptr, /*EaLength=*/0);
     if (sts != STATUS_SUCCESS) {
+      std::cout << "ConnectToPipe:got bad status" << std::endl;
       if (sts != STATUS_PIPE_NOT_AVAILABLE) {
+        std::cout << "ConnectToPipe:got pipe not available" << std::endl;
         break;
       }
 
       sts = WaitForPipeAvailability(name);
       if (sts != STATUS_SUCCESS && sts != STATUS_IO_TIMEOUT) {
+        std::cout << "ConnectToPipe:got real error=" << sts << std::endl;
         break;
       }
+      std::cout << "ConnectToPipe:got bad status but continuing to iterate"
+                << std::endl;
     }
   }
 
   if (sts != STATUS_SUCCESS) {
+    std::cout << "ConnectToPipe:got invalid handle, finally returning"
+              << std::endl;
     return ERROR_PIPE_NOT_CONNECTED;
   }
 
@@ -408,6 +420,8 @@ DWORD ClientWin::ConnectToPipe(const std::string& pipename, HANDLE* handle) {
                                /*maxCollectionCount=*/nullptr,
                                /*connectionTimeout=*/nullptr)) {
     DWORD err = GetLastError();
+    std::cout << "ConnectToPipe: failed to set handle state err=" << err
+              << std::endl;
     CloseHandle(h);
     return err;
   }
