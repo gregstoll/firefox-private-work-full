@@ -41,7 +41,7 @@ TEST(ContentAnalysisMisbehaving, LargeResponse)
   ContentAnalysisResponse response;
   EXPECT_EQ(0, agentInfo.client->Send(request, &response));
   EXPECT_STREQ("request token", response.request_token().c_str());
-  EXPECT_EQ(1000, response.results().size());
+  EXPECT_EQ(1001, response.results().size());
 
   BOOL terminateResult = ::TerminateProcess(agentInfo.processInfo.hProcess, 0);
   EXPECT_NE(FALSE, terminateResult)

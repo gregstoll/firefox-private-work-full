@@ -30,6 +30,7 @@ class ContentAnalysisEventWin : public ContentAnalysisEventBase {
   std::string SerializeStringToSendToBrowser() {
     return agent_to_chrome()->SerializeAsString();
   }
+  void SetResponseSent() { response_sent_ = true; }
 
   HANDLE Pipe() const { return hPipe_; }
 

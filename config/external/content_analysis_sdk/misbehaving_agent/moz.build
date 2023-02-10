@@ -4,18 +4,17 @@ if CONFIG["ENABLE_TESTS"]:
     DEFINES["UNICODE"] = True
 
     SOURCES += [
-        "../../../../third_party/content_analysis_sdk/common/utils_win.cc",
         "../../../../toolkit/components/contentanalysis/content_analysis/sdk/analysis.pb.cc",
         "agent.cc",
         "agent_base.cc",
         "agent_utils_win.cc",
         "agent_win.cc",
+        "common/utils_win.cc",
         "event_base.cc",
         "event_win.cc",
     ]
 
     LOCAL_INCLUDES += [
-        "../../../../third_party/content_analysis_sdk",
         "../../../../third_party/content_analysis_sdk/agent/include/",
         "../../../../toolkit/components/contentanalysis",
     ]

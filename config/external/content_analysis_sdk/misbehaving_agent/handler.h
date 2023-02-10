@@ -43,7 +43,7 @@ static DWORD WriteBigMessageToPipe(HANDLE pipe, const std::string& message) {
   DWORD err = ERROR_SUCCESS;
   const char* cursor = message.data();
   for (DWORD size = message.length(); size > 0;) {
-    std::cout << "[demo] WriteBigMessageToPipe top of loop, remaing size "
+    std::cout << "[demo] WriteBigMessageToPipe top of loop, remaining size "
               << size << std::endl;
     if (WriteFile(pipe, cursor, size, /*written=*/nullptr, &overlapped)) {
       std::cout << "[demo] WriteBigMessageToPipe: success" << std::endl;
@@ -69,6 +69,8 @@ static DWORD WriteBigMessageToPipe(HANDLE pipe, const std::string& message) {
       break;
     }
 
+    // TODO - this is kinda hacky, but need to reset err
+    err = ERROR_SUCCESS;
     std::cout << "[demo] WriteBigMessageToPipe: bottom of loop, wrote "
               << written << std::endl;
     cursor += written;
@@ -158,8 +160,15 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
               event.get());
       HANDLE pipe = eventWin->Pipe();
       std::cout << "largeResponse about to write" << std::endl;
-      WriteBigMessageToPipe(pipe, eventWin->SerializeStringToSendToBrowser());
+      DWORD result = WriteBigMessageToPipe(
+          pipe, eventWin->SerializeStringToSendToBrowser());
+      std::cout << "largeResponse done writing with error " << result
+                << std::endl;
+      eventWin->SetResponseSent();
     } else {
+      std::cout << "(misbehaving) Handler::AnalyzeContent() about to call "
+                   "event->Send(), mode is "
+                << mode_ << std::endl;
       // Send the response back to Google Chrome.
       auto rc = event->Send();
       if (rc != content_analysis::sdk::ResultCode::OK) {

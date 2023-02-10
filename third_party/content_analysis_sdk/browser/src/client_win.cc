@@ -158,7 +158,11 @@ std::vector<char> ClientWin::ReadNextMessageFromPipe(HANDLE pipe) {
       if (err != ERROR_MORE_DATA)
         break;
 
-      buffer.resize(buffer.size() + kBufferSize);
+      // TODO - bug fix
+      final_size += static_cast<int>(read);
+      // TODO - possible bug fix, always keep buffer kBufferSize bigger than we
+      // need
+      buffer.resize(final_size + kBufferSize);
       p = buffer.data() + buffer.size() - kBufferSize;
     }
   }
