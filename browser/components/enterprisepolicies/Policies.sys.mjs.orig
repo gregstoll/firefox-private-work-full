@@ -22,13 +22,15 @@ XPCOMUtils.defineLazyServiceGetters(lazy, {
 });
 
 ChromeUtils.defineESModuleGetters(lazy, {
-  AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
   BookmarksPolicies: "resource:///modules/policies/BookmarksPolicies.sys.mjs",
-  CustomizableUI: "resource:///modules/CustomizableUI.sys.mjs",
   FileUtils: "resource://gre/modules/FileUtils.sys.mjs",
-  PdfJsDefaultPreferences: "resource://pdf.js/PdfJsDefaultPreferences.sys.mjs",
   ProxyPolicies: "resource:///modules/policies/ProxyPolicies.sys.mjs",
   WebsiteFilter: "resource:///modules/policies/WebsiteFilter.sys.mjs",
+});
+
+XPCOMUtils.defineLazyModuleGetters(lazy, {
+  AddonManager: "resource://gre/modules/AddonManager.jsm",
+  CustomizableUI: "resource:///modules/CustomizableUI.jsm",
 });
 
 const PREF_LOGLEVEL = "browser.policies.loglevel";
@@ -111,7 +113,7 @@ export var Policies = {
 
   AllowedDomainsForApps: {
     onBeforeAddons(manager, param) {
-      Services.obs.addObserver(function (subject, topic, data) {
+      Services.obs.addObserver(function(subject, topic, data) {
         let channel = subject.QueryInterface(Ci.nsIHttpChannel);
         if (channel.URI.host.endsWith(".google.com")) {
           channel.setRequestHeader("X-GoogApps-Allowed-Domains", param, true);
@@ -422,7 +424,7 @@ export var Policies = {
               continue;
             }
             let reader = new FileReader();
-            reader.onloadend = function () {
+            reader.onloadend = function() {
               if (reader.readyState != reader.DONE) {
                 lazy.log.error(`Unable to read certificate - ${certfile.path}`);
                 return;
@@ -476,19 +478,6 @@ export var Policies = {
             reader.readAsBinaryString(file);
           }
         })();
-      }
-    },
-  },
-
-  Containers: {
-    // Queried directly by ContextualIdentityService.sys.mjs
-  },
-
-  ContentAnalysis: {
-    onBeforeUIStartup(manager, param) {
-      if ("Enabled" in param) {
-        let enabled = !!param.Enabled;
-        setAndLockPref("browser.contentanalysis.enabled", enabled);
       }
     },
   },
@@ -1004,18 +993,6 @@ export var Policies = {
           param.Locked
         );
       }
-      if ("EmailTracking" in param) {
-        PoliciesUtils.setDefaultPref(
-          "privacy.trackingprotection.emailtracking.enabled",
-          param.EmailTracking,
-          param.Locked
-        );
-        PoliciesUtils.setDefaultPref(
-          "privacy.trackingprotection.emailtracking.pbmode.enabled",
-          param.EmailTracking,
-          param.Locked
-        );
-      }
       if ("Exceptions" in param) {
         addAllowDenyPermissions("trackingprotection", param.Exceptions);
       }
@@ -1292,6 +1269,27 @@ export var Policies = {
     },
   },
 
+  FlashPlugin: {
+    onBeforeUIStartup(manager, param) {
+      addAllowDenyPermissions("plugin:flash", param.Allow, param.Block);
+
+      const FLASH_NEVER_ACTIVATE = 0;
+      const FLASH_ASK_TO_ACTIVATE = 1;
+
+      let flashPrefVal;
+      if (param.Default === undefined || param.Default) {
+        flashPrefVal = FLASH_ASK_TO_ACTIVATE;
+      } else {
+        flashPrefVal = FLASH_NEVER_ACTIVATE;
+      }
+      if (param.Locked) {
+        setAndLockPref("plugin.state.flash", flashPrefVal);
+      } else if (param.Default !== undefined) {
+        PoliciesUtils.setDefaultPref("plugin.state.flash", flashPrefVal);
+      }
+    },
+  },
+
   GoToIntranetSiteForSingleWordEntryInAddressBar: {
     onBeforeAddons(manager, param) {
       setAndLockPref("browser.fixup.dns_first_for_single_words", param);
@@ -1327,8 +1325,9 @@ export var Policies = {
       if ("schemes" in param) {
         for (let scheme in param.schemes) {
           let handlerInfo = param.schemes[scheme];
-          let realHandlerInfo =
-            lazy.gExternalProtocolService.getProtocolHandlerInfo(scheme);
+          let realHandlerInfo = lazy.gExternalProtocolService.getProtocolHandlerInfo(
+            scheme
+          );
           processMIMEInfo(handlerInfo, realHandlerInfo);
         }
       }
@@ -1680,7 +1679,7 @@ export var Policies = {
 
   Preferences: {
     onBeforeAddons(manager, param) {
-      let allowedPrefixes = [
+      const allowedPrefixes = [
         "accessibility.",
         "app.update.",
         "browser.",
@@ -1706,20 +1705,13 @@ export var Policies = {
         "ui.",
         "widget.",
       ];
-      if (!AppConstants.MOZ_REQUIRE_SIGNING) {
-        allowedPrefixes.push("xpinstall.signatures.required");
-      }
       const allowedSecurityPrefs = [
         "security.block_fileuri_script_with_wrong_mime",
         "security.default_personal_cert",
         "security.insecure_connection_text.enabled",
         "security.insecure_connection_text.pbmode.enabled",
         "security.mixed_content.block_active_content",
-        "security.osclientcerts.assume_rsa_pss_support",
         "security.osclientcerts.autoload",
-        "security.OCSP.enabled",
-        "security.OCSP.require",
-        "security.ssl.enable_ocsp_stapling",
         "security.ssl.errorReporting.enabled",
         "security.tls.enable_0rtt_data",
         "security.tls.hello_downgrade_check",
@@ -1787,23 +1779,7 @@ export var Policies = {
                 // automatically converting these values to booleans.
                 // Since we allow arbitrary prefs now, we have to do
                 // something different. See bug 1666836.
-                // Even uglier, because pdfjs prefs are set async, we need
-                // to get their type from PdfJsDefaultPreferences.
-                if (preference.startsWith("pdfjs.")) {
-                  let preferenceTail = preference.replace("pdfjs.", "");
-                  if (
-                    preferenceTail in lazy.PdfJsDefaultPreferences &&
-                    typeof lazy.PdfJsDefaultPreferences[preferenceTail] ==
-                      "number"
-                  ) {
-                    prefBranch.setIntPref(preference, param[preference].Value);
-                  } else {
-                    prefBranch.setBoolPref(
-                      preference,
-                      !!param[preference].Value
-                    );
-                  }
-                } else if (
+                if (
                   prefBranch.getPrefType(preference) == prefBranch.PREF_INT ||
                   ![0, 1].includes(param[preference].Value)
                 ) {
@@ -2039,7 +2015,7 @@ export var Policies = {
           await runOncePerModification(
             "removeSearchEngines",
             JSON.stringify(param.Remove),
-            async function () {
+            async function() {
               for (let engineName of param.Remove) {
                 let engine = Services.search.getEngineByName(engineName);
                 if (engine) {
@@ -2135,31 +2111,10 @@ export var Policies = {
 
   SecurityDevices: {
     onProfileAfterChange(manager, param) {
+      let securityDevices = param;
       let pkcs11db = Cc["@mozilla.org/security/pkcs11moduledb;1"].getService(
         Ci.nsIPKCS11ModuleDB
       );
-      let securityDevices;
-      if (param.Add || param.Delete) {
-        // We're using the new syntax.
-        securityDevices = param.Add;
-        if (param.Delete) {
-          for (let deviceName of param.Delete) {
-            try {
-              pkcs11db.deleteModule(deviceName);
-            } catch (e) {
-              // Ignoring errors here since it might stick around in policy
-              // after removing. Alternative would be to listModules and
-              // make sure it's there before removing, but that seems
-              // like unnecessary work.
-            }
-          }
-        }
-      } else {
-        securityDevices = param;
-      }
-      if (!securityDevices) {
-        return;
-      }
       for (let deviceName in securityDevices) {
         let foundModule = false;
         for (let module of pkcs11db.listModules()) {
@@ -2189,11 +2144,13 @@ export var Policies = {
     },
     onAllWindowsRestored(manager, param) {
       if (param) {
-        let homeButtonPlacement =
-          lazy.CustomizableUI.getPlacementOfWidget("home-button");
+        let homeButtonPlacement = lazy.CustomizableUI.getPlacementOfWidget(
+          "home-button"
+        );
         if (!homeButtonPlacement) {
-          let placement =
-            lazy.CustomizableUI.getPlacementOfWidget("forward-button");
+          let placement = lazy.CustomizableUI.getPlacementOfWidget(
+            "forward-button"
+          );
           lazy.CustomizableUI.addWidgetToArea(
             "home-button",
             lazy.CustomizableUI.AREA_NAVBAR,
@@ -2460,9 +2417,8 @@ function addAllowDenyPermissions(permissionName, allowList, blockList) {
     } catch (ex) {
       // It's possible if the origin was invalid, we'll have a string instead of an origin.
       lazy.log.error(
-        `Unable to add ${permissionName} permission for ${
-          origin.href || origin
-        }`
+        `Unable to add ${permissionName} permission for ${origin.href ||
+          origin}`
       );
     }
   }
@@ -2684,7 +2640,7 @@ let ChromeURLBlockPolicy = {
     }
     let contentLocationSpec = contentLocation.spec.toLowerCase();
     if (
-      gBlockedAboutPages.some(function (aboutPage) {
+      gBlockedAboutPages.some(function(aboutPage) {
         return contentLocationSpec.startsWith(aboutPage.toLowerCase());
       })
     ) {
