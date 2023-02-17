@@ -14,63 +14,30 @@
 
 namespace content_analysis::sdk {
 class Client;
-class ContentAnalysisRequest;
-class ClientDownloadRequest_Resource;
 class ContentAnalysisResponse;
-class ContentAnalysisAcknowledgement;
 }  // namespace content_analysis::sdk
 
 namespace mozilla {
 namespace contentanalysis {
 
-class ContentAnalysis;
-
-class ClientDownloadResource : public nsIClientDownloadResource {
+class ContentAnalysis : public nsIContentAnalysis {
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
-  NS_DECL_NSICLIENTDOWNLOADRESOURCE
+  NS_DECL_NSICONTENTANALYSIS
 
-  ClientDownloadResource(nsAString&& aUrl, unsigned long aResourceType);
+  nsresult RunAcknowledgeTask(
+      nsIContentAnalysisAcknowledgement* aAcknowledgement,
+      const std::string& aRequestToken);
 
- private:
-  virtual ~ClientDownloadResource() = default;
-
-  nsString mUrl;
-  unsigned long mResourceType;
-};
-
-class ContentAnalysisRequest : public nsIContentAnalysisRequest {
- public:
-  NS_DECL_THREADSAFE_ISUPPORTS
-  NS_DECL_NSICONTENTANALYSISREQUEST
-
-  ContentAnalysisRequest(unsigned long aAnalysisType, nsAString&& aString,
-                         bool aStringIsFilePath);
+  ContentAnalysis() = default;
 
  private:
-  virtual ~ContentAnalysisRequest() = default;
+  virtual ~ContentAnalysis();
+  nsresult EnsureContentAnalysisClient();
+  nsresult RunAnalyzeRequestTask(RefPtr<nsIContentAnalysisRequest> aRequest,
+                                 RefPtr<mozilla::dom::Promise> aPromise);
 
-  // See nsIContentAnalysisRequest for values
-  unsigned long mAnalysisType;
-
-  // Text content to analyze.  Only one of textContent or filePath is defined.
-  nsString mTextContent;
-
-  // Name of file to analyze.  Only one of textContent or filePath is defined.
-  nsString mFilePath;
-
-  // The URL containing the file download/upload or to which web content is
-  // being uploaded.
-  nsString mUrl;
-
-  // Sha256 digest of file.
-  nsCString mSha256Digest;
-
-  // URLs involved in the download.
-  nsTArray<RefPtr<nsIClientDownloadResource>> mResources;
-
-  // Email address of user.
-  nsString mEmail;
+  static StaticDataMutex<UniquePtr<content_analysis::sdk::Client>> sCaClient;
 };
 
 class ContentAnalysisResponse : public nsIContentAnalysisResponse {
@@ -96,40 +63,6 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
   // ContentAnalysis (or, more precisely, it's Client object) must outlive
   // the transaction.
   RefPtr<ContentAnalysis> mOwner;
-};
-
-class ContentAnalysisAcknowledgement
-    : public nsIContentAnalysisAcknowledgement {
- public:
-  NS_DECL_THREADSAFE_ISUPPORTS
-  NS_DECL_NSICONTENTANALYSISACKNOWLEDGEMENT
-
- private:
-  virtual ~ContentAnalysisAcknowledgement();
-
-  // See nsIContentAnalysisAcknowledgement for values
-  unsigned long mResult;
-  unsigned long mFinalAction;
-};
-
-class ContentAnalysis : public nsIContentAnalysis {
- public:
-  NS_DECL_THREADSAFE_ISUPPORTS
-  NS_DECL_NSICONTENTANALYSIS
-
-  nsresult RunAcknowledgeTask(
-      nsIContentAnalysisAcknowledgement* aAcknowledgement,
-      const std::string& aRequestToken);
-
-  ContentAnalysis() = default;
-
- private:
-  virtual ~ContentAnalysis();
-  nsresult EnsureContentAnalysisClient();
-  nsresult RunAnalyzeRequestTask(RefPtr<nsIContentAnalysisRequest> aRequest,
-                                 RefPtr<mozilla::dom::Promise> aPromise);
-
-  static StaticDataMutex<UniquePtr<content_analysis::sdk::Client>> sCaClient;
 };
 
 }  // namespace contentanalysis
