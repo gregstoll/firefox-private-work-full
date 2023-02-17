@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <map>
 #include <iostream>
 #include <utility>
 #include <vector>
@@ -19,6 +20,25 @@
 #include "content_analysis/sdk/analysis.pb.h"
 #include "content_analysis/sdk/analysis_agent.h"
 #include "event_win.h"
+
+enum class Mode {
+// Have to use a "Mode_" prefix to avoid preprocessing problems in StringToMode
+#define AGENT_MODE(name) Mode_##name,
+#include "modes.h"
+#undef AGENT_MODE
+};
+
+std::map<std::string, Mode> sStringToMode = {
+#define AGENT_MODE(name) {#name, Mode::Mode_##name},
+#include "modes.h"
+#undef AGENT_MODE
+};
+
+std::map<Mode, std::string> sModeToString = {
+#define AGENT_MODE(name) {Mode::Mode_##name, #name},
+#include "modes.h"
+#undef AGENT_MODE
+};
 
 // Writes a string to the pipe. Returns ERROR_SUCCESS if successful, else
 // returns GetLastError() of the write.  This function does not return until
@@ -86,10 +106,20 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
  public:
   using Event = content_analysis::sdk::ContentAnalysisEvent;
 
-  Handler(unsigned long delay, const std::string& mode)
-      : delay_(delay), mode_(mode) {}
+  Handler(unsigned long delay, Mode mode) : delay_(delay), mode_(mode) {}
 
  protected:
+  template <size_t N>
+  DWORD SendBytesOverPipe(const unsigned char (&bytes)[N],
+                          const std::unique_ptr<Event>& event) {
+    content_analysis::sdk::ContentAnalysisEventWin* eventWin =
+        reinterpret_cast<content_analysis::sdk::ContentAnalysisEventWin*>(
+            event.get());
+    HANDLE pipe = eventWin->Pipe();
+    std::string s(reinterpret_cast<const char*>(bytes), N);
+    return WriteBigMessageToPipe(pipe, s);
+  }
+
   // Analyzes one request from Google Chrome and responds back to the browser
   // with either an allow or block verdict.
   void AnalyzeContent(std::unique_ptr<Event> event) {
@@ -102,9 +132,9 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
     std::cout << std::endl << "----------" << std::endl << std::endl;
 
     DumpRequest(event->GetRequest());
-    std::cout << "Mode is " << mode_ << std::endl;
+    std::cout << "Mode is " << sModeToString[mode_] << std::endl;
 
-    if (mode_ == "largeResponse") {
+    if (mode_ == Mode::Mode_largeResponse) {
       for (size_t i = 0; i < 1000; ++i) {
         content_analysis::sdk::ContentAnalysisResponse_Result* result =
             event->GetResponse().add_results();
@@ -114,6 +144,42 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
         triggeredRule->set_rule_id("some_id");
         triggeredRule->set_rule_name("some_name");
       }
+    } else if (mode_ ==
+               Mode::Mode_invalidUtf8StringStartByteIsContinuationByte) {
+      // protobuf docs say
+      // "A string must always contain UTF-8 encoded text."
+      // So let's try something invalid
+      // Anything with bits 10xxxxxx is only a continuation code point
+      event->GetResponse().set_request_token("\x80\x41\x41\x41");
+    } else if (mode_ ==
+               Mode::Mode_invalidUtf8StringEndsInMiddleOfMultibyteSequence) {
+      // f0 byte indicates there should be 3 bytes following it, but here
+      // there are only 2
+      event->GetResponse().set_request_token("\x41\xf0\x90\x8d");
+    } else if (mode_ == Mode::Mode_invalidUtf8StringOverlongEncoding) {
+      // codepoint U+20AC, should be encoded in 3 bytes (E2 82 AC)
+      // instead of 4
+      event->GetResponse().set_request_token("\xf0\x82\x82\xac");
+    } else if (mode_ == Mode::Mode_invalidUtf8StringMultibyteSequenceTooShort) {
+      // f0 byte indicates there should be 3 bytes following it, but here
+      // there are only 2 (\x41 is not a continuation byte)
+      event->GetResponse().set_request_token("\xf0\x90\x8d\x41");
+    } else if (mode_ == Mode::Mode_invalidUtf8StringDecodesToInvalidCodePoint) {
+      // decodes to U+1FFFFF, but only up to U+10FFFF is a valid code point
+      event->GetResponse().set_request_token("\xf7\xbf\xbf\xbf");
+    } else if (mode_ == Mode::Mode_stringWithEmbeddedNull) {
+      event->GetResponse().set_request_token("\x41\x00\x41");
+    } else if (mode_ == Mode::Mode_zeroResults) {
+      event->GetResponse().clear_results();
+    } else if (mode_ == Mode::Mode_resultWithInvalidStatus) {
+      // This causes an assertion failure and the process exits
+      // So we just serialize this ourselves below
+      /*content_analysis::sdk::ContentAnalysisResponse_Result* result =
+          event->GetResponse().mutable_results(0);
+      result->set_status(
+          static_cast<
+              ::content_analysis::sdk::ContentAnalysisResponse_Result_Status>(
+              100));*/
     } else {
       bool block = false;
       bool success = true;
@@ -154,7 +220,7 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
       std::this_thread::sleep_for(std::chrono::seconds(delay_));
     }
 
-    if (mode_ == "largeResponse") {
+    if (mode_ == Mode::Mode_largeResponse) {
       content_analysis::sdk::ContentAnalysisEventWin* eventWin =
           reinterpret_cast<content_analysis::sdk::ContentAnalysisEventWin*>(
               event.get());
@@ -165,10 +231,82 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
       std::cout << "largeResponse done writing with error " << result
                 << std::endl;
       eventWin->SetResponseSent();
+    } else if (mode_ == Mode::Mode_resultWithInvalidStatus) {
+      content_analysis::sdk::ContentAnalysisEventWin* eventWin =
+          reinterpret_cast<content_analysis::sdk::ContentAnalysisEventWin*>(
+              event.get());
+      HANDLE pipe = eventWin->Pipe();
+      std::string serializedString = eventWin->SerializeStringToSendToBrowser();
+      // The last byte is the status value. Set it to 100
+      serializedString[serializedString.length() - 1] = 100;
+      WriteBigMessageToPipe(pipe, serializedString);
+    } else if (mode_ == Mode::Mode_messageTruncatedInMiddleOfString) {
+      unsigned char bytes[5];
+      bytes[0] = 10;  // field 1 (request_token), LEN encoding
+      bytes[1] = 13;  // length 13
+      bytes[2] = 65;  // "A"
+      bytes[3] = 66;  // "B"
+      bytes[4] = 67;  // "C"
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageWithInvalidWireType) {
+      unsigned char bytes[5];
+      bytes[0] = 15;  // field 1 (request_token), "7" encoding (invalid value)
+      bytes[1] = 3;   // length 3
+      bytes[2] = 65;  // "A"
+      bytes[3] = 66;  // "B"
+      bytes[4] = 67;  // "C"
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageWithUnusedFieldNumber) {
+      unsigned char bytes[5];
+      bytes[0] = 82;  // field 10 (this is invalid), LEN encoding
+      bytes[1] = 3;   // length 3
+      bytes[2] = 65;  // "A"
+      bytes[3] = 66;  // "B"
+      bytes[4] = 67;  // "C"
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageWithWrongStringWireType) {
+      unsigned char bytes[2];
+      bytes[0] = 10;  // field 1 (request_token), VARINT encoding (but should be
+                      // a string/LEN)
+      bytes[1] = 42;  // value 42
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageWithZeroTag) {
+      unsigned char bytes[1];
+      // The protobuf deserialization code seems to handle this
+      // in a special case.
+      bytes[0] = 0;
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageWithZeroFieldButNonzeroWireType) {
+      // The protobuf deserialization code seems to handle this
+      // in a special case.
+      unsigned char bytes[5];
+      bytes[0] = 2;   // field 0 (invalid), LEN encoding
+      bytes[1] = 3;   // length 13
+      bytes[2] = 65;  // "A"
+      bytes[3] = 66;  // "B"
+      bytes[4] = 67;  // "C"
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageWithGroupEnd) {
+      // GROUP_ENDs are obsolete and the deserialization code
+      // handles them in a special case.
+      unsigned char bytes[1];
+      bytes[0] = 12;  // field 1 (request_token), GROUP_END encoding
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageTruncatedInMiddleOfVarint) {
+      unsigned char bytes[2];
+      bytes[0] = 16;   // field 2 (status), VARINT encoding
+      bytes[1] = 128;  // high bit is set, indicating there
+                       // should be a byte after this
+      SendBytesOverPipe(bytes, event);
+    } else if (mode_ == Mode::Mode_messageTruncatedInMiddleOfTag) {
+      unsigned char bytes[1];
+      bytes[0] = 128;  // tag is actually encoded as a VARINT, so set the high
+                       // bit, indicating there should be a byte after this
+      SendBytesOverPipe(bytes, event);
     } else {
       std::cout << "(misbehaving) Handler::AnalyzeContent() about to call "
                    "event->Send(), mode is "
-                << mode_ << std::endl;
+                << sModeToString[mode_] << std::endl;
       // Send the response back to Google Chrome.
       auto rc = event->Send();
       if (rc != content_analysis::sdk::ResultCode::OK) {
@@ -357,7 +495,7 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
   // For the demo, block any strings that match these wildcards.
 
   unsigned long delay_;
-  std::string mode_;
+  Mode mode_;
 };
 
 #endif  // CONTENT_ANALYSIS_DEMO_HANDLER_H_
