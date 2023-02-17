@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <regex>
 
 #include "content_analysis/sdk/analysis_agent.h"
 #include "demo/handler.h"
@@ -12,6 +14,8 @@
 // Different paths are used depending on whether this agent should run as a
 // use specific agent or not.  These values are chosen to match the test
 // values in chrome browser.
+//constexpr char kPathUser[] = "fx-user";
+//constexpr char kPathSystem[] = "fx-system";
 constexpr char kPathUser[] = "path_user";
 constexpr char kPathSystem[] = "path_system";
 
@@ -19,11 +23,25 @@ constexpr char kPathSystem[] = "path_system";
 const char* path = kPathSystem;
 bool user_specific = false;
 unsigned long delay = 0;  // In seconds.
+std::vector<std::pair<std::string, std::regex>> toBlock;
 
 // Command line parameters.
 constexpr const char* kArgUserSpecific = "--user";
 constexpr const char* kArgDelaySpecific = "--delay=";
+constexpr const char* kArgToBlock = "--toblock=";
 constexpr const char* kArgHelp = "--help";
+
+std::vector<std::pair<std::string, std::regex>>
+ParseToBlock(const std::string toBlock) {
+  std::vector<std::pair<std::string, std::regex>> ret;
+  for (auto it = toBlock.begin(); it != toBlock.end(); /* nop */) {
+    auto it2 = std::find(it, toBlock.end(), ',');
+    ret.push_back(std::make_pair(std::string(it, it2), std::regex(it, it2)));
+    it = it2 == toBlock.end() ? it2 : it2 + 1;
+  }
+
+  return ret;
+}
 
 bool ParseCommandLine(int argc, char* argv[]) {
   for (int i = 1; i < argc; ++i) {
@@ -36,6 +54,8 @@ bool ParseCommandLine(int argc, char* argv[]) {
       if (delay > 30) {
           delay = 30;
       }
+    } else if (arg.find(kArgToBlock) == 0) {
+      toBlock = ParseToBlock(arg.substr(strlen(kArgToBlock)));
     } else if (arg.find(kArgHelp) == 0) {
       return false;
     }
@@ -53,6 +73,7 @@ void PrintHelp() {
     << std::endl << "Options:"  << std::endl
     << kArgUserSpecific << " : Make agent OS user specific" << std::endl
     << kArgDelaySpecific << "<delay> : Add a delay to request processing in seconds (max 30)." << std::endl
+    << kArgToBlock << "<regex> : Regular expression matching file and text content to block." << std::endl
     << kArgHelp << " : prints this help message" << std::endl;
 }
 
@@ -65,7 +86,7 @@ int main(int argc, char* argv[]) {
   // Each agent uses a unique name to identify itself with Google Chrome.
   content_analysis::sdk::ResultCode rc;
   auto agent = content_analysis::sdk::Agent::Create(
-      {path, user_specific}, std::make_unique<Handler>(delay), &rc);
+      {path, user_specific}, std::make_unique<Handler>(delay, toBlock), &rc);
   if (!agent || rc != content_analysis::sdk::ResultCode::OK) {
     std::cout << "[Demo] Error starting agent: "
               << content_analysis::sdk::ResultCodeToString(rc)
