@@ -10,7 +10,7 @@
 
 // Global app config.
 std::string pipePath;
-std::string mode;
+Mode mode;
 unsigned long delay = 0;  // In seconds.
 
 // Command line parameters.
@@ -19,9 +19,8 @@ constexpr const char* kArgMode = "--mode=";
 constexpr const char* kArgPipeBaseName = "--pipename=";
 constexpr const char* kArgHelp = "--help";
 
-const std::set<std::string> kAllowedModes = {"largeResponse"};
-
 bool ParseCommandLine(int argc, char* argv[]) {
+  std::string modeStr;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg.find(kArgDelaySpecific) == 0) {
@@ -32,7 +31,7 @@ bool ParseCommandLine(int argc, char* argv[]) {
     } else if (arg.find(kArgPipeBaseName) == 0) {
       pipePath = arg.substr(strlen(kArgPipeBaseName));
     } else if (arg.find(kArgMode) == 0) {
-      mode = arg.substr(strlen(kArgMode));
+      modeStr = arg.substr(strlen(kArgMode));
     } else if (arg.find(kArgHelp) == 0) {
       return false;
     }
@@ -41,16 +40,17 @@ bool ParseCommandLine(int argc, char* argv[]) {
     std::cout << "No pipe path specified!" << std::endl;
     return false;
   }
-  if (mode.empty()) {
+  if (modeStr.empty()) {
     std::cout << "No mode specified!" << std::endl;
     return false;
   }
-  if (kAllowedModes.find(mode) == kAllowedModes.end()) {
-    std::cout << "\"" << mode << "\""
+  if (sStringToMode.find(modeStr) == sStringToMode.end()) {
+    std::cout << "\"" << modeStr << "\""
               << " is not a valid mode!" << std::endl;
     return false;
   }
 
+  mode = sStringToMode[modeStr];
   return true;
 }
 
@@ -73,8 +73,8 @@ void PrintHelp() {
       << std::endl
       << kArgMode << "<mode> : Mode." << std::endl
       << "  Allowed modes: ";
-  for (const std::string& allowedMode : kAllowedModes) {
-    std::cout << allowedMode << " ";
+  for (const auto& allowedMode : sStringToMode) {
+    std::cout << allowedMode.first << " ";
   }
   std::cout << std::endl;
   std::cout << kArgHelp << " : prints this help message" << std::endl;
