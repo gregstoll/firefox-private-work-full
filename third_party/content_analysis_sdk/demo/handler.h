@@ -7,10 +7,13 @@
 
 #include <time.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <utility>
+#include <vector>
+#include <regex>
 
 #include "content_analysis/sdk/analysis_agent.h"
 
@@ -20,7 +23,10 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
  public:
   using Event = content_analysis::sdk::ContentAnalysisEvent;
 
-  Handler(unsigned long delay) : delay_(delay) {}
+  Handler(unsigned long delay,
+          const std::vector<std::pair<std::string, std::regex>>& _toBlock =
+              std::vector<std::pair<std::string, std::regex>>()) :
+      delay_(delay), toBlock(_toBlock) {}
 
  protected:
   // Analyzes one request from Google Chrome and responds back to the browser
@@ -43,13 +49,7 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
       block = ShouldBlockRequest(
           event->GetRequest().text_content());
     } else if (event->GetRequest().has_file_path()) {
-      std::string content;
-      success =
-          ReadContentFromFile(event->GetRequest().file_path(),
-                              &content);
-      if (success) {
-        block = ShouldBlockRequest(content);
-      }
+      block = ShouldBlockRequest(event->GetRequest().file_path());
     }
 
     if (!success) {
@@ -199,7 +199,11 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
 
     std::string file_path =
         request.has_file_path()
-        ? request.file_path() : "None, bulk text entry or print";
+        ? request.file_path() : "<none>";
+
+    std::string text_content =
+        request.has_text_content()
+        ? request.text_content() : "<none>";
 
     std::string machine_user =
         request.has_client_metadata() &&
@@ -225,6 +229,7 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
     std::cout << "  Filename: " << filename << std::endl;
     std::cout << "  Digest: " << digest << std::endl;
     std::cout << "  Filepath: " << file_path << std::endl;
+    std::cout << "  Text content: '" << text_content << "'" << std::endl;
     std::cout << "  Machine user: " << machine_user << std::endl;
     std::cout << "  Email: " << email << std::endl;
   }
@@ -255,8 +260,21 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
     // Determines if the request should be blocked.  For this simple example
     // the content is blocked if the string "block" is found.  Otherwise the
     // content is allowed.
-    return content.find("block") != std::string::npos;
+    for (auto& r : toBlock) {
+      if (std::regex_search(content, r.second)) {
+        std::cout << "'" << content << "' matches regex '"
+                  << r.first << "'" << std::endl;
+        return true;
+      }
+      std::cout << "'" << content << "' does not match regex '"
+                << r.first << "'" << std::endl;
+    }
+    std::cout << "'" << content << "' was not blocked\n";
+    return false;
   }
+
+  // For the demo, block any strings that match these wildcards.
+  std::vector<std::pair<std::string, std::regex>> toBlock;
 
   unsigned long delay_;
 };
