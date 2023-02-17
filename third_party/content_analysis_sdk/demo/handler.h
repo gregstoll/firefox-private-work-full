@@ -7,11 +7,14 @@
 
 #include <time.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <thread>
 #include <utility>
+#include <vector>
+#include <regex>
 
 #include "content_analysis/sdk/analysis_agent.h"
 #include "demo/atomic_output.h"
@@ -23,8 +26,10 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
  public:
   using Event = content_analysis::sdk::ContentAnalysisEvent;
 
-  Handler(unsigned long delay, const std::string& print_data_file_path) :
-      delay_(delay), print_data_file_path_(print_data_file_path) {
+  Handler(unsigned long delay, const std::string& print_data_file_path,
+          const std::vector<std::pair<std::string, std::regex>>& _toBlock =
+              std::vector<std::pair<std::string, std::regex>>()) :
+      toBlock(_toBlock), delay_(delay), print_data_file_path_(print_data_file_path) {
   }
 
   unsigned long delay() { return delay_; }
@@ -221,7 +226,11 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
 
     std::string file_path =
         request.has_file_path()
-        ? request.file_path() : "None, bulk text entry or print";
+        ? request.file_path() : "<none>";
+
+    std::string text_content =
+        request.has_text_content()
+        ? request.text_content() : "<none>";
 
     std::string machine_user =
         request.has_client_metadata() &&
@@ -304,8 +313,21 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
     // Determines if the request should be blocked.  For this simple example
     // the content is blocked if the string "block" is found.  Otherwise the
     // content is allowed.
-    return content.find("block") != std::string::npos;
+    for (auto& r : toBlock) {
+      if (std::regex_search(content, r.second)) {
+        std::cout << "'" << content << "' matches regex '"
+                  << r.first << "'" << std::endl;
+        return true;
+      }
+      std::cout << "'" << content << "' does not match regex '"
+                << r.first << "'" << std::endl;
+    }
+    std::cout << "'" << content << "' was not blocked\n";
+    return false;
   }
+
+  // For the demo, block any strings that match these wildcards.
+  std::vector<std::pair<std::string, std::regex>> toBlock;
 
   unsigned long delay_;
   std::string print_data_file_path_;

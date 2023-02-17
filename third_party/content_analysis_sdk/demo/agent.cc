@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <regex>
 
 #include "content_analysis/sdk/analysis_agent.h"
 #include "demo/handler.h"
@@ -12,6 +14,8 @@
 // Different paths are used depending on whether this agent should run as a
 // use specific agent or not.  These values are chosen to match the test
 // values in chrome browser.
+//constexpr char kPathUser[] = "fx-user";
+//constexpr char kPathSystem[] = "fx-system";
 constexpr char kPathUser[] = "path_user";
 constexpr char kPathSystem[] = "brcm_chrm_cas";
 
@@ -22,6 +26,7 @@ bool user_specific = false;
 unsigned long delay = 0;  // In seconds.
 unsigned long num_threads = 8u;
 std::string save_print_data_path = "";
+std::vector<std::pair<std::string, std::regex>> toBlock;
 
 // Command line parameters.
 constexpr const char* kArgDelaySpecific = "--delay=";
@@ -29,8 +34,21 @@ constexpr const char* kArgPath = "--path=";
 constexpr const char* kArgQueued = "--queued";
 constexpr const char* kArgThreads = "--threads=";
 constexpr const char* kArgUserSpecific = "--user";
+constexpr const char* kArgToBlock = "--toblock=";
 constexpr const char* kArgHelp = "--help";
 constexpr const char* kArgSavePrintRequestDataTo = "--save-print-request-data-to=";
+
+std::vector<std::pair<std::string, std::regex>>
+ParseToBlock(const std::string toBlock) {
+  std::vector<std::pair<std::string, std::regex>> ret;
+  for (auto it = toBlock.begin(); it != toBlock.end(); /* nop */) {
+    auto it2 = std::find(it, toBlock.end(), ',');
+    ret.push_back(std::make_pair(std::string(it, it2), std::regex(it, it2)));
+    it = it2 == toBlock.end() ? it2 : it2 + 1;
+  }
+
+  return ret;
+}
 
 bool ParseCommandLine(int argc, char* argv[]) {
   for (int i = 1; i < argc; ++i) {
@@ -54,6 +72,8 @@ bool ParseCommandLine(int argc, char* argv[]) {
       use_queue = true;
     } else if (arg.find(kArgThreads) == 0) {
       num_threads = std::stoul(arg.substr(strlen(kArgThreads)));
+    } else if (arg.find(kArgToBlock) == 0) {
+      toBlock = ParseToBlock(arg.substr(strlen(kArgToBlock)));
     } else if (arg.find(kArgHelp) == 0) {
       return false;
     } else if (arg.find(kArgSavePrintRequestDataTo) == 0) {
@@ -77,8 +97,9 @@ void PrintHelp() {
     << kArgQueued << " : Queue requests for processing in a background thread" << std::endl
     << kArgThreads << " : When queued, number of threads in the request processing thread pool" << std::endl
     << kArgUserSpecific << " : Make agent OS user specific." << std::endl
-    << kArgHelp << " : prints this help message" << std::endl
-    << kArgSavePrintRequestDataTo << " : saves the PDF data to the given file path for print requests";
+    << kArgSavePrintRequestDataTo << " : saves the PDF data to the given file path for print requests" << std::endl
+    << kArgToBlock << "<regex> : Regular expression matching file and text content to block." << std::endl
+    << kArgHelp << " : prints this help message" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -89,7 +110,7 @@ int main(int argc, char* argv[]) {
 
   auto handler = use_queue
       ? std::make_unique<QueuingHandler>(num_threads, delay, save_print_data_path)
-      : std::make_unique<Handler>(delay, save_print_data_path);
+      : std::make_unique<Handler>(delay, save_print_data_path, toBlock);
 
   // Each agent uses a unique name to identify itself with Google Chrome.
   content_analysis::sdk::ResultCode rc;
