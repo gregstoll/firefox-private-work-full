@@ -481,14 +481,38 @@ Download.prototype = {
           }
 
           if (lazy.gContentAnalysis.isActive) {
-            let promise = lazy.gContentAnalysis.AnalyzeContentRequest({
-              analysisType: Ci.nsIContentAnalysis.FILE_DOWNLOADED,
-              filePath: this.target.path,
+            let resources = [{
               url: this.source.url,
+              type: Ci.nsIClientDownloadResource.DOWNLOAD_URL,
+            }];
+
+            let redirects = this.saver.getRedirects();
+            if (redirects) {
+              for (redirect of redirects) {
+                resources.push({
+                  url: redirect.uri,
+                  type: Ci.nsIClientDownloadResource.DOWNLOAD_REDIRECT,
+                });
+              }
+            }
+
+            // source.referrerInfo is a string or nsIReferrerInfo that
+            // represents the download referrer.  May be null.
+            if (this.source.referrerInfo) {
+              resources.push({
+                url: isString(this.source.referrerInfo) ?
+                        this.source.referrerInfo :
+                        this.source.referrerInfo.originalReferrer.spec,
+                type: Ci.nsIClientDownloadResource.TAB_URL,
+              });
+            }
+
+            let promise = lazy.gContentAnalysis.AnalyzeContentRequest({
+              analysisType: Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
+              resources: resources,
+              url: this.source.url,
+              filePath: this.target.path,
               // sha256Digest: not set for downloads,
-              // TODO: URLs involved in the download (empty for non-downloads).
-              // resources: make_resources();
-              resources: [],
             });
             if (promise) {
               // TODO: start this as soon as we have the file
@@ -518,7 +542,7 @@ Download.prototype = {
                       break;
                     case Ci.nsIContentAnalysisResponse.BLOCK:
                       // TODO: UI
-                      exception = new DownloadError({ becauseContentAnalysisBlock: true });
+                      exception = new DownloadError({ becauseBlockedByContentAnalysis: true });
                       finalAction = Ci.nsIContentAnalysisAcknowledgement.BLOCK;
                       break;
                   }
@@ -530,8 +554,9 @@ Download.prototype = {
                     throw exception;
                   }
                 },
-                (failure) => { throw new DownloadError({ becauseContentAnalysisFailure: true });
-              });
+                (failure) => {
+                  throw new DownloadError({ becauseContentAnalysisFailure: true });
+                });
             }
           }
 
@@ -1893,7 +1918,9 @@ export var DownloadError = function(aProperties) {
   } else if (
     aProperties.becauseBlocked ||
     aProperties.becauseBlockedByParentalControls ||
-    aProperties.becauseBlockedByReputationCheck
+    aProperties.becauseBlockedByReputationCheck ||
+    aProperties.becauseContentAnalysisFailure ||
+    aProperties.becauseBlockedByContentAnalysis
   ) {
     this.message = "Download blocked.";
   } else {
@@ -1921,6 +1948,12 @@ export var DownloadError = function(aProperties) {
     this.becauseBlocked = true;
     this.becauseBlockedByReputationCheck = true;
     this.reputationCheckVerdict = aProperties.reputationCheckVerdict || "";
+  } else if (aProperties.becauseBlockedByContentAnalysis) {
+    this.becauseBlocked = true;
+    this.becauseBlockedByContentAnalysis = true;
+  } else if (aProperties.becauseContentAnalysisFailure) {
+    this.becauseBlocked = true;
+    this.becauseContentAnalysisFailure = true;
   } else if (aProperties.becauseBlocked) {
     this.becauseBlocked = true;
   }
@@ -1979,6 +2012,17 @@ DownloadError.prototype = {
   becauseBlockedByReputationCheck: false,
 
   /**
+   * Indicates the download was blocked by a local content analysis tool.
+   */
+  becauseContentAnalysisBlock: false,
+
+  /**
+   * Indicates the download was blocked due to an error in a local content
+   * analysis tool.
+   */
+  becauseContentAnalysisFailure: false,
+
+  /**
    * If becauseBlockedByReputationCheck is true, indicates the detailed reason
    * why the download was blocked, according to the "BLOCK_VERDICT_" constants.
    *
@@ -2008,6 +2052,8 @@ DownloadError.prototype = {
       becauseBlocked: this.becauseBlocked,
       becauseBlockedByParentalControls: this.becauseBlockedByParentalControls,
       becauseBlockedByReputationCheck: this.becauseBlockedByReputationCheck,
+      becauseBlockedByContentAnalysis: this.becauseBlockedByContentAnalysis,
+      becauseContentAnalysisFailure: this.becauseContentAnalysisFailure,
       reputationCheckVerdict: this.reputationCheckVerdict,
     };
 
@@ -2038,6 +2084,8 @@ DownloadError.fromSerializable = function(aSerializable) {
       property != "becauseBlocked" &&
       property != "becauseBlockedByParentalControls" &&
       property != "becauseBlockedByReputationCheck" &&
+      property != "becauseBlockedByContentAnalysis" &&
+      property != "becauseContentAnalysisFailure" &&
       property != "reputationCheckVerdict"
   );
 

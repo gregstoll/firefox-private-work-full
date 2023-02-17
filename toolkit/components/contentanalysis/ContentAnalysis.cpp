@@ -103,17 +103,6 @@ static nsresult ConvertToProtobuf(
   return NS_OK;
 }
 
-ContentAnalysisRequest::ContentAnalysisRequest(unsigned long aAnalysisType,
-                                               nsAString&& aString,
-                                               bool aStringIsFilePath)
-    : mAnalysisType(aAnalysisType) {
-  if (aStringIsFilePath) {
-    mFilePath = aString;
-  } else {
-    mTextContent = aString;
-  }
-}
-
 static nsresult ConvertToProtobuf(
     nsIContentAnalysisRequest* aIn,
     content_analysis::sdk::ContentAnalysisRequest* aOut) {
@@ -192,14 +181,81 @@ static nsresult ConvertToProtobuf(
   if (!resources.IsEmpty()) {
     auto* pbClientDownloadRequest = requestData->mutable_csd();
     for (auto& nsResource : resources) {
-      auto* resource = static_cast<ClientDownloadResource*>(nsResource.get());
-      rv =
-          ConvertToProtobuf(resource, pbClientDownloadRequest->add_resources());
+      rv = ConvertToProtobuf(nsResource.get(),
+                             pbClientDownloadRequest->add_resources());
       NS_ENSURE_SUCCESS(rv, rv);
     }
   }
 
   return NS_OK;
+}
+
+static void LogRequest(
+    content_analysis::sdk::ContentAnalysisRequest* pbRequest) {
+  // We cannot use Protocol Buffer's DebugString() because we optimize for
+  // lite runtime.
+  if (!static_cast<LogModule*>(gContentAnalysisLog)
+           ->ShouldLog(LogLevel::Debug)) {
+    return;
+  }
+
+  std::stringstream ss;
+  ss << "ContentAnalysisRequest:" << std::endl;
+
+#define ADD_FIELD(PBUF, NAME, FUNC)    \
+  ss << "  " << NAME << ": ";          \
+  if ((PBUF)->has_##FUNC())            \
+    ss << (PBUF)->FUNC() << std::endl; \
+  else                                 \
+    ss << "<none>" << std::endl;
+
+#define ADD_EXISTS(PBUF, NAME, FUNC)                                           \
+  ss << "  " << NAME << ": " << ((PBUF)->has_##FUNC() ? "<exists>" : "<none>") \
+     << std::endl;
+
+  ADD_FIELD(pbRequest, "Expires", expires_at);
+  ADD_FIELD(pbRequest, "Analysis Type", analysis_connector);
+  ADD_FIELD(pbRequest, "Request Token", request_token);
+  ADD_FIELD(pbRequest, "File Path", file_path);
+  ADD_FIELD(pbRequest, "Text Content", text_content);
+  // TODO: Tags
+  ADD_EXISTS(pbRequest, "Request Data Struct", request_data);
+  auto* requestData =
+      pbRequest->has_request_data() ? &pbRequest->request_data() : nullptr;
+  if (requestData) {
+    ADD_FIELD(requestData, "  Url", url);
+    ADD_FIELD(requestData, "  Email", email);
+    ADD_FIELD(requestData, "  SHA-256 Digest", digest);
+    ADD_FIELD(requestData, "  Filename", filename);
+    ADD_EXISTS(requestData, "  Client Download Request struct", csd);
+    auto* csd = requestData->has_csd() ? &requestData->csd() : nullptr;
+    if (csd) {
+      uint32_t i = 0;
+      for (auto& resource : csd->resources()) {
+        ss << "      Resource " << i << ":" << std::endl;
+        ADD_FIELD(&resource, "      Url", url);
+        ADD_FIELD(&resource, "      Type", type);
+        ++i;
+      }
+    }
+  }
+  ADD_EXISTS(pbRequest, "Client Metadata Struct", client_metadata);
+  auto* clientMetadata = pbRequest->has_client_metadata()
+                             ? &pbRequest->client_metadata()
+                             : nullptr;
+  if (clientMetadata) {
+    ADD_EXISTS(clientMetadata, "  Browser Struct", browser);
+    auto* browser =
+        clientMetadata->has_browser() ? &clientMetadata->browser() : nullptr;
+    if (browser) {
+      ADD_FIELD(browser, "    Machine User", machine_user);
+    }
+  }
+
+#undef ADD_EXISTS
+#undef ADD_FIELD
+
+  LOGD("%s", ss.str().c_str());
 }
 
 ContentAnalysisResponse::ContentAnalysisResponse(
@@ -242,6 +298,42 @@ RefPtr<ContentAnalysisResponse> ContentAnalysisResponse::FromProtobuf(
   return ret;
 }
 
+static void LogResponse(
+    content_analysis::sdk::ContentAnalysisResponse* pbResponse) {
+  if (!static_cast<LogModule*>(gContentAnalysisLog)
+           ->ShouldLog(LogLevel::Debug)) {
+    return;
+  }
+
+  std::stringstream ss;
+  ss << "ContentAnalysisResponse:" << std::endl;
+
+#define ADD_FIELD(PBUF, NAME, FUNC)    \
+  ss << "  " << NAME << ": ";          \
+  if ((PBUF)->has_##FUNC())            \
+    ss << (PBUF)->FUNC() << std::endl; \
+  else                                 \
+    ss << "<none>" << std::endl;
+
+  ADD_FIELD(pbResponse, "Request Token", request_token);
+  uint32_t i = 0;
+  for (auto& result : pbResponse->results()) {
+    ss << "  Result " << i << ":" << std::endl;
+    ADD_FIELD(&result, "    Status", status);
+    uint32_t j = 0;
+    for (auto& rule : result.triggered_rules()) {
+      ss << "    Rule " << j << ":" << std::endl;
+      ADD_FIELD(&rule, "    action", action);
+      ++j;
+    }
+    ++i;
+  }
+
+#undef ADD_FIELD
+
+  LOGD("%s", ss.str().c_str());
+}
+
 static nsresult ConvertToProtobuf(
     nsIContentAnalysisAcknowledgement* aIn, const std::string& aRequestToken,
     content_analysis::sdk::ContentAnalysisAcknowledgement* aOut) {
@@ -266,73 +358,40 @@ static nsresult ConvertToProtobuf(
 }
 
 NS_IMETHODIMP
-ContentAnalysisRequest::GetAnalysisType(uint32_t* aAnalysisType) {
-  *aAnalysisType = mAnalysisType;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-ContentAnalysisRequest::GetTextContent(nsAString& aTextContent) {
-  aTextContent = mTextContent;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-ContentAnalysisRequest::GetFilePath(nsAString& aFilePath) {
-  aFilePath = mFilePath;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-ContentAnalysisRequest::GetUrl(nsAString& aUrl) {
-  aUrl = mUrl;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-ContentAnalysisRequest::GetEmail(nsAString& aEmail) {
-  aEmail = mEmail;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-ContentAnalysisRequest::GetSha256Digest(nsACString& aSha256Digest) {
-  aSha256Digest = mSha256Digest;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-ContentAnalysisRequest::GetResources(
-    nsTArray<RefPtr<nsIClientDownloadResource>>& aResources) {
-  aResources = mResources.Clone();
-  return NS_OK;
-}
-
-NS_IMETHODIMP
 ContentAnalysisResponse::GetAction(uint32_t* aAction) {
   *aAction = mAction;
   return NS_OK;
 }
 
-NS_IMETHODIMP
-ContentAnalysisAcknowledgement::GetResult(uint32_t* aResult) {
-  *aResult = mResult;
-  return NS_OK;
-}
+static void LogAcknowledgement(
+    content_analysis::sdk::ContentAnalysisAcknowledgement* pbAck) {
+  if (!static_cast<LogModule*>(gContentAnalysisLog)
+           ->ShouldLog(LogLevel::Debug)) {
+    return;
+  }
 
-NS_IMETHODIMP
-ContentAnalysisAcknowledgement::GetFinalAction(uint32_t* aFinalAction) {
-  *aFinalAction = mFinalAction;
-  return NS_OK;
-}
+  std::stringstream ss;
+  ss << "ContentAnalysisAcknowledgement:" << std::endl;
 
+#define ADD_FIELD(PBUF, NAME, FUNC)    \
+  ss << "  " << NAME << ": ";          \
+  if ((PBUF)->has_##FUNC())            \
+    ss << (PBUF)->FUNC() << std::endl; \
+  else                                 \
+    ss << "<none>" << std::endl;
+
+  ADD_FIELD(pbAck, "Status", status);
+  ADD_FIELD(pbAck, "Final Action", final_action);
+
+#undef ADD_FIELD
+
+  LOGD("%s", ss.str().c_str());
+}
+ 
 void ContentAnalysisResponse::SetOwner(RefPtr<ContentAnalysis> aOwner) {
   mOwner = aOwner;
 }
 
-// TODO: Finish refcount wiring
-NS_IMPL_ISUPPORTS(ClientDownloadResource, nsIClientDownloadResource);
-NS_IMPL_ISUPPORTS(ContentAnalysisRequest, nsIContentAnalysisRequest);
 NS_IMPL_ISUPPORTS(ContentAnalysisResponse, nsIContentAnalysisResponse);
 NS_IMPL_ISUPPORTS(ContentAnalysisAcknowledgement,
                   nsIContentAnalysisAcknowledgement);
@@ -377,6 +436,9 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
   rv = ConvertToProtobuf(aRequest, &pbRequest);
   NS_ENSURE_SUCCESS(rv, rv);
 
+  LOGD("Issuing ContentAnalysisRequest");
+  LogRequest(&pbRequest);
+
   // The content analysis connection is synchronous so run in the background.
   nsMainThreadPtrHandle<dom::Promise> promiseHolder(
       new nsMainThreadPtrHolder<dom::Promise>("content analysis promise",
@@ -395,7 +457,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                   [rv, owner, promiseHolder = std::move(promiseHolder),
                    pbResponse = std::move(pbResponse)]() mutable {
                     if (SUCCEEDED(rv)) {
-                      LOGD("Content analysis client transaction succeeded");
+                      LOGD("Content analysis resolving response promise");
                       RefPtr<ContentAnalysisResponse> response =
                           ContentAnalysisResponse::FromProtobuf(
                               std::move(pbResponse));
@@ -425,6 +487,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
             }
 
             LOGD("Content analysis client transaction succeeded");
+            LogResponse(&pbResponse);
             rv = NS_OK;
           }),
       NS_DISPATCH_EVENT_MAY_BLOCK);
@@ -476,6 +539,9 @@ nsresult ContentAnalysis::RunAcknowledgeTask(
   content_analysis::sdk::ContentAnalysisAcknowledgement pbAck;
   rv = ConvertToProtobuf(aAcknowledgement, aRequestToken, &pbAck);
   NS_ENSURE_SUCCESS(rv, rv);
+
+  LOGD("Issuing ContentAnalysisAcknowledgement");
+  LogAcknowledgement(&pbAck);
 
   // The Client object from the SDK must be kept live as long as there are
   // active transactions.
