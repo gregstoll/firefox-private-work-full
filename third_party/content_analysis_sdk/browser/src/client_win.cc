@@ -93,7 +93,7 @@ DWORD ClientWin::ConnectToPipe(const std::string& pipename, HANDLE* handle) {
                     GENERIC_READ | GENERIC_WRITE,
                     /*shareMode=*/0,
                     /*securityAttr=*/nullptr, OPEN_EXISTING,
-                    /*flags=*/0,
+                    /*flags=*/SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
                     /*template=*/nullptr);
     if (h == INVALID_HANDLE_VALUE) {
       if (GetLastError() != ERROR_PIPE_BUSY) {
