@@ -393,8 +393,6 @@ void ContentAnalysisResponse::SetOwner(RefPtr<ContentAnalysis> aOwner) {
 }
 
 NS_IMPL_ISUPPORTS(ContentAnalysisResponse, nsIContentAnalysisResponse);
-NS_IMPL_ISUPPORTS(ContentAnalysisAcknowledgement,
-                  nsIContentAnalysisAcknowledgement);
 NS_IMPL_ISUPPORTS(ContentAnalysis, nsIContentAnalysis);
 
 ContentAnalysis::~ContentAnalysis() {
