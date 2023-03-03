@@ -38,7 +38,7 @@ class AgentWin : public AgentBase {
   // Returns true if there is at least one client connected to this agent.
   bool IsAClientConnectedForTesting();
 
-private:
+ private:
   // Represents one connection to a Google Chrome browser, or one pipe
   // listening for a Google Chrome browser to connect.
   class Connection {
@@ -54,11 +54,8 @@ private:
     // `Connection` objects cannot be copied or moved because the OVERLAPPED
     // structure cannot be changed or moved in memory while an I/O operation
     // is in progress.
-    Connection(const std::string& pipename,
-               bool user_specific,
-               AgentEventHandler* handler,
-               bool is_first_pipe,
-               ResultCode* rc);
+    Connection(const std::string& pipename, bool user_specific,
+               AgentEventHandler* handler, bool is_first_pipe, ResultCode* rc);
     Connection(const Connection& other) = delete;
     Connection(Connection&& other) = delete;
     Connection& operator=(const Connection& other) = delete;
@@ -88,8 +85,7 @@ private:
     // Resets this connection object to listen for a new Google Chrome browser.
     // When `user_specific` is true there is a different agent instance per OS
     // user.
-    ResultCode ResetInternal(const std::string& pipename,
-                             bool user_specific,
+    ResultCode ResetInternal(const std::string& pipename, bool user_specific,
                              bool is_first_pipe);
 
     // Cleans up this connection object so that it can be reused with a new
@@ -139,9 +135,8 @@ private:
     // if it is not ERROR_SUCCESS.
     //
     // Returns the error passed into the method.
-    ResultCode NotifyIfError(const char* context,
-                             ResultCode rc,
-                             DWORD err=ERROR_SUCCESS);
+    ResultCode NotifyIfError(const char* context, ResultCode rc,
+                             DWORD err = ERROR_SUCCESS);
 
     // The handler to call for various agent events.
     AgentEventHandler* handler_ = nullptr;

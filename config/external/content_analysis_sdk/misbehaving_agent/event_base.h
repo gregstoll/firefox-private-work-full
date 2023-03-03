@@ -13,7 +13,7 @@ namespace sdk {
 // Base ContentAnalysisEvent class with code common to all platforms.
 class ContentAnalysisEventBase : public ContentAnalysisEvent {
  public:
-   // ContentAnalysisEvent:
+  // ContentAnalysisEvent:
   ResultCode Close() override;
   const BrowserInfo& GetBrowserInfo() const override { return browser_info_; }
   const ContentAnalysisRequest& GetRequest() const override { return request_; }
@@ -24,9 +24,11 @@ class ContentAnalysisEventBase : public ContentAnalysisEvent {
 
   ContentAnalysisRequest* request() { return &request_; }
   AgentToChrome* agent_to_chrome() { return &agent_to_chrome_; }
-  ContentAnalysisResponse* response() { return agent_to_chrome()->mutable_response(); }
+  ContentAnalysisResponse* response() {
+    return agent_to_chrome()->mutable_response();
+  }
 
-private:
+ private:
   BrowserInfo browser_info_;
   ContentAnalysisRequest request_;
   AgentToChrome agent_to_chrome_;

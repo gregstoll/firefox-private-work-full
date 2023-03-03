@@ -8,19 +8,16 @@ namespace content_analysis {
 namespace sdk {
 
 ContentAnalysisEventBase::ContentAnalysisEventBase(
-   const BrowserInfo& browser_info)
- : browser_info_(browser_info) {}
+    const BrowserInfo& browser_info)
+    : browser_info_(browser_info) {}
 
-ResultCode ContentAnalysisEventBase::Close() {
-  return ResultCode::OK;
-}
+ResultCode ContentAnalysisEventBase::Close() { return ResultCode::OK; }
 
 ResultCode UpdateResponse(ContentAnalysisResponse& response,
-                   const std::string& tag,
-                   ContentAnalysisResponse::Result::Status status) {
-  auto result = response.results_size() > 0
-      ? response.mutable_results(0)
-      : response.add_results();
+                          const std::string& tag,
+                          ContentAnalysisResponse::Result::Status status) {
+  auto result = response.results_size() > 0 ? response.mutable_results(0)
+                                            : response.add_results();
 
   if (!tag.empty()) {
     result->set_tag(tag);
@@ -48,8 +45,8 @@ ResultCode SetEventVerdictTo(
   // Content analysis responses generated with this SDK contain at most one
   // triggered rule.
   auto rule = result->triggered_rules_size() > 0
-      ? result->mutable_triggered_rules(0)
-      : result->add_triggered_rules();
+                  ? result->mutable_triggered_rules(0)
+                  : result->add_triggered_rules();
 
   rule->set_action(action);
 
@@ -57,8 +54,8 @@ ResultCode SetEventVerdictTo(
 }
 
 ResultCode SetEventVerdictToBlock(ContentAnalysisEvent* event) {
-  return SetEventVerdictTo(event,
-      ContentAnalysisResponse::Result::TriggeredRule::BLOCK);
+  return SetEventVerdictTo(
+      event, ContentAnalysisResponse::Result::TriggeredRule::BLOCK);
 }
 
 }  // namespace sdk
