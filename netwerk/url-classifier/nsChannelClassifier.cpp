@@ -7,12 +7,17 @@
 #include "nsChannelClassifier.h"
 
 #include "nsCharSeparatedTokenizer.h"
+#include "nsIBufferedStreams.h"
 #include "nsICacheEntry.h"
 #include "nsICachingChannel.h"
 #include "nsIChannel.h"
+#include "nsIContentAnalysis.h"
+#include "nsIInputStream.h"
+#include "nsIMultiplexInputStream.h"
 #include "nsIObserverService.h"
 #include "nsIProtocolHandler.h"
 #include "nsIScriptSecurityManager.h"
+#include "nsIUploadChannel2.h"
 #include "nsNetUtil.h"
 #include "nsXULAppAPI.h"
 #include "nsQueryObject.h"
@@ -173,6 +178,27 @@ nsresult nsChannelClassifier::StartInternal() {
   NS_ENSURE_SUCCESS(rv, rv);
   if (hasFlags) return NS_ERROR_UNEXPECTED;
 
+  // TODO hacky, needs better error handling, etc.
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis = mozilla::components::nsIContentAnalysis::Service(&rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+  bool contentAnalysisIsActive = false;
+  rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+  NS_ENSURE_SUCCESS(rv, rv);
+  // TODO just for testing
+  if (contentAnalysisIsActive || true) {
+    nsTArray<nsCOMPtr<nsIFileInputStream>> streams;
+    rv = GatherFileInputStreams(mChannel, streams);
+    NS_ENSURE_SUCCESS(rv, rv);
+    for (nsCOMPtr<nsIFileInputStream>& fileInputStream : streams) {
+      nsCOMPtr<nsIFile> file;
+      rv = fileInputStream->GetFile(getter_AddRefs(file));
+      NS_ENSURE_SUCCESS(rv, rv);
+      nsAutoString filePath;
+      rv = file->GetPath(filePath);
+      NS_ENSURE_SUCCESS(rv, rv);
+    }
+  } 
+
   nsCString exceptionHostnames =
       CachedPrefs::GetInstance()->GetExceptionHostnames();
   if (!exceptionHostnames.IsEmpty()) {
@@ -249,6 +275,57 @@ nsresult nsChannelClassifier::StartInternal() {
   // Add an observer for shutdown
   AddShutdownObserver();
   return NS_OK;
+}
+
+nsresult nsChannelClassifier::GatherFileInputStreams(
+  nsIChannel* aChannel, nsTArray<nsCOMPtr<nsIFileInputStream>>& aStreams) {
+  nsCOMPtr<nsIUploadChannel2> uploadChannel(do_QueryInterface(aChannel));
+  nsresult rv = NS_OK;
+  if (uploadChannel) {
+    int64_t contentLength;
+    nsCOMPtr<nsIInputStream> inputStream;
+    rv = uploadChannel->CloneUploadStream(&contentLength,
+                                          getter_AddRefs(inputStream));
+    NS_ENSURE_SUCCESS(rv, rv);
+    if (inputStream) {
+      return GatherFileInputStreams(inputStream, aStreams);
+    }
+  }
+  return rv;
+}
+
+nsresult nsChannelClassifier::GatherFileInputStreams(
+    nsIInputStream* aInputStream,
+    nsTArray<nsCOMPtr<nsIFileInputStream>>& aStreams) {
+  nsresult rv = NS_OK;
+  nsCOMPtr<nsIFileInputStream> fileInputStream(do_QueryInterface(aInputStream));
+  if (fileInputStream) {
+    aStreams.AppendElement(fileInputStream);
+    return rv;
+  }
+  nsCOMPtr<nsIMultiplexInputStream> multiplexInputStream(
+      do_QueryInterface(aInputStream));
+  if (multiplexInputStream) {
+    for (uint32_t i = 0; i < multiplexInputStream->GetCount(); ++i) {
+      nsCOMPtr<nsIInputStream> inputStreamInMultiplex;
+      rv = multiplexInputStream->GetStream(
+          i, getter_AddRefs(inputStreamInMultiplex));
+      NS_ENSURE_SUCCESS(rv, rv);
+      rv = GatherFileInputStreams(inputStreamInMultiplex, aStreams);
+      NS_ENSURE_SUCCESS(rv, rv);
+    }
+    return rv;
+  }
+  nsCOMPtr<nsIBufferedInputStream> bufferedStream(
+      do_QueryInterface(aInputStream));
+  if (bufferedStream) {
+    nsCOMPtr<nsIInputStream> bufferedInnerStream;
+    rv = bufferedStream->GetData(getter_AddRefs(bufferedInnerStream));
+    NS_ENSURE_SUCCESS(rv, rv);
+    return GatherFileInputStreams(bufferedInnerStream, aStreams);
+  }
+  // TODO handle SlicedInputStream somehow
+  return rv;
 }
 
 bool nsChannelClassifier::IsHostnameEntitylisted(

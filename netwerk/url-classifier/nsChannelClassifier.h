@@ -5,9 +5,11 @@
 #ifndef nsChannelClassifier_h__
 #define nsChannelClassifier_h__
 
+#include "nsIFileStreams.h"
 #include "nsIObserver.h"
 #include "nsIURIClassifier.h"
 #include "nsCOMPtr.h"
+#include "nsTArray.h"
 #include "mozilla/Attributes.h"
 
 #include <functional>
@@ -45,6 +47,10 @@ class nsChannelClassifier final : public nsIURIClassifierCallback,
   // Start is called. Returns NS_OK if and only if we will get a callback
   // from the classifier service.
   nsresult StartInternal();
+  nsresult GatherFileInputStreams(
+      nsIChannel* aChannel, nsTArray<nsCOMPtr<nsIFileInputStream>> & aStreams);
+  nsresult GatherFileInputStreams(
+      nsIInputStream* aInputStream, nsTArray<nsCOMPtr<nsIFileInputStream>> & aStreams);
   // Helper function to check a URI against the hostname entitylist
   bool IsHostnameEntitylisted(nsIURI* aUri, const nsACString& aEntitylisted);
 
