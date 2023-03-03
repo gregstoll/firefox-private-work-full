@@ -26,7 +26,7 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
   Handler(unsigned long delay,
           const std::vector<std::pair<std::string, std::regex>>& _toBlock =
               std::vector<std::pair<std::string, std::regex>>()) :
-      delay_(delay), toBlock(_toBlock) {}
+      toBlock(_toBlock), delay_(delay) {}
 
  protected:
   // Analyzes one request from Google Chrome and responds back to the browser

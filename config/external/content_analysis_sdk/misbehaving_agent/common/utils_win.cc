@@ -18,7 +18,7 @@ std::string GetUserSID() {
 
   HANDLE handle;
   if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &handle) &&
-    !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &handle)) {
+      !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &handle)) {
     return std::string();
   }
 
@@ -31,7 +31,7 @@ std::string GetUserSID() {
     }
   }
   if (GetTokenInformation(handle, TokenUser, buffer.data(), buffer.size(),
-    &length)) {
+                          &length)) {
     TOKEN_USER* info = reinterpret_cast<TOKEN_USER*>(buffer.data());
     char* sid_string;
     if (ConvertSidToStringSidA(info->User.Sid, &sid_string)) {
@@ -48,8 +48,7 @@ std::string GetPipeName(const std::string& base, bool user_specific) {
   std::string pipename = "\\\\.\\pipe\\" + base;
   if (user_specific) {
     std::string sid = GetUserSID();
-    if (sid.empty())
-      return std::string();
+    if (sid.empty()) return std::string();
 
     pipename += "." + sid;
   }
@@ -57,11 +56,8 @@ std::string GetPipeName(const std::string& base, bool user_specific) {
   return pipename;
 }
 
-DWORD CreatePipe(
-    const std::string& name,
-    bool user_specific,
-    bool is_first_pipe,
-    HANDLE* handle) {
+DWORD CreatePipe(const std::string& name, bool user_specific,
+                 bool is_first_pipe, HANDLE* handle) {
   DWORD err = ERROR_SUCCESS;
   DWORD mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED;
 
@@ -75,13 +71,16 @@ DWORD CreatePipe(
   // OS users and all authenticated logged on users can reads and write
   // messages.
   //
-  // See https://docs.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-definition-language
+  // See
+  // https://docs.microsoft.com/en-us/windows/win32/secauthz/security-descriptor-definition-language
   // for a description of this string format.
-  constexpr char kDaclEveryone[] = "D:"
+  constexpr char kDaclEveryone[] =
+      "D:"
       "(A;OICI;GA;;;CO)"     // Allow full control to creator owner.
       "(A;OICI;GA;;;BA)"     // Allow full control to admins.
       "(A;OICI;GRGW;;;WD)";  // Allow read and write to everyone.
-  constexpr char kDaclUserSpecific[] = "D:"
+  constexpr char kDaclUserSpecific[] =
+      "D:"
       "(A;OICI;GA;;;CO)"     // Allow full control to creator owner.
       "(A;OICI;GA;;;BA)"     // Allow full control to admins.
       "(A;OICI;GRGW;;;IU)";  // Allow read and write to interactive user.
@@ -90,8 +89,8 @@ DWORD CreatePipe(
   sa.nLength = sizeof(sa);
   sa.bInheritHandle = FALSE;
   if (!ConvertStringSecurityDescriptorToSecurityDescriptorA(
-      user_specific ? kDaclUserSpecific : kDaclEveryone, SDDL_REVISION_1,
-      &sa.lpSecurityDescriptor, /*outSdSize=*/nullptr)) {
+          user_specific ? kDaclUserSpecific : kDaclEveryone, SDDL_REVISION_1,
+          &sa.lpSecurityDescriptor, /*outSdSize=*/nullptr)) {
     err = GetLastError();
     return err;
   }
@@ -104,9 +103,10 @@ DWORD CreatePipe(
     mode |= FILE_FLAG_FIRST_PIPE_INSTANCE;
   }
   *handle = CreateNamedPipeA(name.c_str(), mode,
-    PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT |
-    PIPE_REJECT_REMOTE_CLIENTS, PIPE_UNLIMITED_INSTANCES, kBufferSize,
-    kBufferSize, 0, &sa);
+                             PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE |
+                                 PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                             PIPE_UNLIMITED_INSTANCES, kBufferSize, kBufferSize,
+                             0, &sa);
   if (*handle == INVALID_HANDLE_VALUE) {
     err = GetLastError();
   }
@@ -118,6 +118,6 @@ DWORD CreatePipe(
   return err;
 }
 
-}  // internal
+}  // namespace internal
 }  // namespace sdk
 }  // namespace content_analysis

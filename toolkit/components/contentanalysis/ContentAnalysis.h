@@ -12,9 +12,9 @@
 
 #include <string>
 
-    namespace content_analysis::sdk {
-  class Client;
-  class ContentAnalysisResponse;
+namespace content_analysis::sdk {
+class Client;
+class ContentAnalysisResponse;
 }  // namespace content_analysis::sdk
 
 namespace mozilla {
