@@ -36,12 +36,10 @@ std::string GetPipeName(const std::string& base, bool user_specific);
 // in can read from and write to the pipe.
 //
 // A handle to the pipe is retuned in `handle`.
-DWORD CreatePipe(const std::string& name,
-                 bool user_specific,
-                 bool is_first_pipe,
-                 HANDLE* handle);
+DWORD CreatePipe(const std::string& name, bool user_specific,
+                 bool is_first_pipe, HANDLE* handle);
 
-}  // internal
+}  // namespace internal
 }  // namespace sdk
 }  // namespace content_analysis
 
