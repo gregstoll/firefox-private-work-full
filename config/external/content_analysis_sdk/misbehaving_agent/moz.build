@@ -2,6 +2,8 @@ if CONFIG["ENABLE_TESTS"]:
     Program('content_analysis_sdk_agent_misbehaving')
 
     DEFINES["UNICODE"] = True
+    DEFINES["GOOGLE_PROTOBUF_NO_RTTI"] = True
+    DEFINES["GOOGLE_PROTOBUF_NO_STATIC_INITIALIZER"] = True
 
     SOURCES += [
         "../../../../toolkit/components/contentanalysis/content_analysis/sdk/analysis.pb.cc",
