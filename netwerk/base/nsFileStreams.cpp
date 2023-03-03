@@ -475,6 +475,14 @@ nsFileInputStream::Init(nsIFile* aFile, int32_t aIOFlags, int32_t aPerm,
 }
 
 NS_IMETHODIMP
+nsFileInputStream::GetFile(nsIFile** aFile) {
+  // TODO error handling?
+  nsCOMPtr<nsIFile> file = mFile;
+  file.forget(aFile);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
 nsFileInputStream::Close() {
   // Get the cache position at the time the file was close. This allows
   // NS_SEEK_CUR on a closed file that has been opened with

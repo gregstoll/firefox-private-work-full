@@ -36,6 +36,8 @@ interface nsIFileInputStream : nsIInputStream
     void init(in nsIFile file, in long ioFlags, in long perm,
               in long behaviorFlags);
 
+    void getFile(out nsIFile file);
+
     /**
      * If this is set, the file will close automatically when the end of the
      * file is reached.
