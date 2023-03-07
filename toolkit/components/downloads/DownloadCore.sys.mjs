@@ -329,17 +329,19 @@ Download.prototype = {
    */
   _launchedFromPanel: false,
 
-  /**
-   * True when content analysis is requested and false when it either
-   * hasn't begun or has completed or failed.
-   */
-  contentAnalysisBegun: false,
+  contentAnalysis: {
+    INITIAL: 0,
+    RUNNING: 1,
+    FINISHED: 2,
 
-  /**
-   * Action to take based on the content analysis request.  See
-   * nsIContentAnalysisAcknowledgement.
-   */
-  contentAnalysisResult: null,
+    state: 0,
+
+    /**
+     * Action to take based on the content analysis request.  See
+     * nsIContentAnalysisAcknowledgement.
+     */
+    result: null,
+  },
 
   /**
    * Starts the download for the first time, or restarts a download that failed
@@ -405,8 +407,8 @@ Download.prototype = {
     this.totalBytes = 0;
     this.currentBytes = 0;
     this.startTime = new Date();
-    this.contentAnalysisBegun = false;
-    this.contentAnalysisResult =
+    this.contentAnalysis.state = this.contentAnalysis.INITIAL;
+    this.contentAnalysis.result =
       Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED;
 
     // Create a new deferred object and an associated promise before starting
@@ -568,7 +570,7 @@ Download.prototype = {
               });
             }
 
-            this.contentAnalysisBegun = true;
+            this.contentAnalysis.state = this.contentAnalysis.RUNNING;
             this._notifyChange();
 
             let promise = lazy.gContentAnalysis.AnalyzeContentRequest({
@@ -623,8 +625,8 @@ Download.prototype = {
                     finalAction,
                   });
 
-                  this.contentAnalysisBegun = false;
-                  this.contentAnalysisResult = finalAction;
+                  this.contentAnalysis.state = this.contentAnalysis.FINISHED;
+                  this.contentAnalysis.result = finalAction;
                   this._notifyChange();
 
                   if (exception) {
@@ -642,8 +644,11 @@ Download.prototype = {
                 }
               );
             }
-            this.contentAnalysisBegun = false;
-            this._notifyChange();
+
+            if (this.contentAnalysis.state != this.contentAnalysis.FINISHED) {
+              this.contentAnalysis.state = this.contentAnalysis.FINISHED;
+              this._notifyChange();
+            }
           }
 
           // Update the status properties for a successful download.
