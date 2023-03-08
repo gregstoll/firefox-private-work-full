@@ -23,11 +23,29 @@ const { BrowserWindowTracker } = ChromeUtils.import(
 );
 
 var ContentAnalysisViews = {
+  _SHOW_NOTIFICATIONS: true,
+
+  _SHOW_DIALOGS: false,
+
+  _SLOW_DLP_NOTIFICATION_TIMEOUT_MS: 30 * 1000,    // 30 sec
+
+  _RESULT_NOTIFICATION_TIMEOUT_MS: 5 * 60 * 1000,    // 5 min
+
+  _RESULT_NOTIFICATION_FAST_TIMEOUT_MS: 60 * 1000,    // 1 min
+
   /**
    * Registers for various messages/events that will indicate the potential
    * need for communicating something to the user. 
    */
   initialize() {
+    // Register only the first instance to get shutdown events.  We use this to
+    // clear any open CA notifications, so it only needs to be added once.
+//    let thisPrototype = Object.getPrototypeOf(this);
+//    if (!('isObserving' in thisPrototype)) {
+//      Services.obs.addObserver(this, 'quit-application-requested');
+//      thisPrototype.isObserving = true;
+//    }
+
     this.initializeDownloadCA();
   },
 
@@ -36,66 +54,127 @@ var ContentAnalysisViews = {
    */
   async initializeDownloadCA() {
     let downloadsView = {
+      _isCorrectWindow: aDownload => {
+        // The correct window is the one associated with the download's
+        // browsing context, or is the topmost window when the download is not
+        // associated with one.
+        return ((!aDownload.source.browsingContextId &&
+                 window === BrowserWindowTracker.getTopWindow()) ||
+                (aDownload.source.browsingContextId &&
+                 BrowsingContext.get(aDownload.source.browsingContextId).topChromeWindow === window));
+      },
 
-      /**
-       * Maps download objects to a timer controlling the "slow operation"
-       * display or null.
-       */
-      _caDownloadsTimers: new Map(),
+      // nsIObserver
+      observe: async (aSubj, aTopic, aData) => {
+        switch (aTopic) {
+          case 'quit-application-requested':
+            // console.log(`observe ${aTopic}`);
+            let allDownloads = await (await Downloads.getList(Downloads.ALL)).getAll();
+            for (var download of allDownloads) {
+              // console.log(`disconnecting ${download} has resultViewNotification as ${download.contentAnalysis.resultView.notification}`);
+              this._clearDownloadViews(download);
+            }
+            Services.obs.removeObserver(downloadsView, 'quit-application-requested');
+        }
+      },
 
       onDownloadAdded: aDownload => {
         // ignored
       },
 
       onDownloadChanged: aDownload => {
-        // Ensure that this is the view for the window associated with the
-        // download, or is the topmost window when the download is not
-        // associated with one.
-        if ((!aDownload.source.browsingContextId &&
-              window !== BrowserWindowTracker.getTopWindow()) ||
-            (aDownload.source.browsingContextId &&
-              BrowsingContext.get(aDownload.source.browsingContextId).topChromeWindow !== window)) {
+        if (!downloadsView._isCorrectWindow(aDownload)) {
           return;
         }
 
-        const SLOW_TIMEOUT_MS = 3000;
+        const SLOW_TIMEOUT_MS = 3000;  // 3 sec
 
-        // On ContentAnalysisBegun, start timer that, when it expires,
+        // On contentAnalysis.RUNNING, start timer that, when it expires,
         // presents a "slow CA check" message.
-        // On ContentAnalysisResult, cancels timer or slow message UI,
-        // if present, and possibly presents the CA verdict.
-        if (aDownload.contentAnalysisBegun &&
-            !downloadsView._caDownloadsTimers.has(aDownload)) {
-          downloadsView._caDownloadsTimers.set(aDownload, setTimeout(() => {
-            downloadsView._caDownloadsTimers.set(aDownload, null);
-            this._showSlowCAMessage(
-              Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
-              aDownload.source.url);
-          }, SLOW_TIMEOUT_MS));
+        if (aDownload.contentAnalysis.state == aDownload.contentAnalysis.RUNNING &&
+            !aDownload.contentAnalysis.hasOwnProperty('busyView')) {
+          aDownload.contentAnalysis.busyView = {
+            timer: setTimeout(() => {
+              aDownload.contentAnalysis.busyView = {
+                notification: this._showSlowCAMessage(
+                  Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
+                  aDownload.source.url),
+              };
+            }, SLOW_TIMEOUT_MS),
+          };
           return;
         }
-        if (!aDownload.contentAnalysisBegun &&
-            downloadsView._caDownloadsTimers.has(aDownload)) {
-          downloadsView.onDownloadRemoved(aDownload);
-          this._showCAResult(
-            Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
-            aDownload.source.url,  /* TODO: Better name */
-            aDownload.contentAnalysisResult);
+
+        // On ContentAnalysis.FINISHED, cancels timer or slow message UI,
+        // if present, and possibly presents the CA verdict.
+        if (aDownload.contentAnalysis.state == aDownload.contentAnalysis.FINISHED &&
+            !aDownload.contentAnalysis.hasOwnProperty('resultView')) {
+          this._disconnectFromView(aDownload.contentAnalysis.busyView);
+          aDownload.contentAnalysis.resultView = {
+            notification: this._showCAResult(
+              Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
+              aDownload.source.url,  /* TODO: Better name */
+              aDownload.contentAnalysis.result),
+          };
         }
       },
 
       onDownloadRemoved: aDownload => {
-        // Cancels "slow operation" timer for the download, if it exists.
-        let timer = downloadsView._caDownloadsTimers.get(aDownload);
-        downloadsView._caDownloadsTimers.delete(aDownload);
-        if (!timer) {
+        if (!downloadsView._isCorrectWindow(aDownload)) {
           return;
         }
-        clearTimeout(timer);
+
+        this._clearDownloadViews(aDownload);
       },
     };
 
+    Services.obs.addObserver(downloadsView, 'quit-application-requested');
     await (await Downloads.getList(Downloads.ALL)).addView(downloadsView);
+  },
+
+  _clearDownloadViews(aDownload) {
+    if ('contentAnalysis.busyView' in aDownload) {
+      this._disconnectFromView(aDownload.contentAnalysis.busyView);
+    }
+
+    if ('contentAnalysis.resultView' in aDownload) {
+      this._disconnectFromView(aDownload.contentAnalysis.resultView);
+    }
+  },
+
+  _disconnectFromView(caView) {
+    // Cancels "slow operation" timer for the download, or any
+    // notifications for it, if it exists.
+    if (!caView) {
+      return;
+    }
+    if ('timer' in caView) {
+      // console.log('removing TIMER');
+      clearTimeout(caView.timer);
+    } else if ('notification' in caView) {
+      // console.log('removing NOTIFICATION');
+      caView.notification.close();
+    }
+  },
+
+  _showMessage(aMessage, aTimeout = 0) {
+    if (this._SHOW_DIALOGS) {
+      window.alert(aMessage);
+    }
+
+    if (this._SHOW_NOTIFICATIONS) {
+      const notification = new Notification('Content Analysis', {
+        body: aMessage,
+      });
+
+//      notification.addEventListener('click', () => { notification.close(); });
+      if (aTimeout != 0) {
+        setTimeout(() => { notification.close(); }, aTimeout);
+      }
+      return notification;
+    }
+
+    return null;
   },
 
   /**
@@ -104,30 +183,44 @@ var ContentAnalysisViews = {
    */
   _showSlowCAMessage(aOperation, aResourceName) {
     // TODO: Better message
-    window.alert("The Content Analysis Tool is taking a looooong time to respond...");
+    return this._showMessage('The Content Analysis Tool is taking a looooong time to respond...');
   },
 
+  /**
+   * Show a message to the user to indicate the result of a CA request.
+   */
   _showCAResult(aOperation, aResourceName, aCAResult) {
-    // NB: ACTION_UNSPECIFIED indicates an unexpected error occurred during
-    // CA consultation.
-    // TODO: Better message
+    // TODO: Better messages
+    let message = null;
+    let timeoutMs = 0;
+
     switch (aCAResult) {
       case Ci.nsIContentAnalysisAcknowledgement.ALLOW:
         // We don't need to show anything
         break;
       case Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY:
-        window.alert("CA responded with REPORT_ONLY");
+        message = 'CA responded with REPORT_ONLY';
+        timeoutMs = this._RESULT_NOTIFICATION_FAST_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.WARN:
-        window.alert("CA responded with WARN");
+        message = 'CA responded with WARN';
+        timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.BLOCK:
-        window.alert("CA responded with BLOCK.  Transfer denied.");
+        message = 'CA responded with BLOCK.  Transfer denied.';
+        timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED:
-        window.alert("An error occurred in communicating with the CA.  Transfer denied.");
+        message = 'An error occurred in communicating with the CA.  Transfer denied.';
+        timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
     }
+
+    if (message) {
+      return this._showMessage(message, timeoutMs);
+    }
+
+    return null;
   },
 };
 
