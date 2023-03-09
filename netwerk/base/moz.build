@@ -46,6 +46,7 @@ XPIDL_SOURCES += [
     "nsIIncrementalStreamLoader.idl",
     "nsIInputStreamChannel.idl",
     "nsIInputStreamPump.idl",
+    "nsIInputStreamWrapper.idl",
     "nsIInterceptionInfo.idl",
     "nsIIOService.idl",
     "nsILoadContextInfo.idl",

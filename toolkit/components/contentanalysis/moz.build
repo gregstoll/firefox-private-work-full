@@ -8,13 +8,15 @@ with Files("**"):
     BUG_COMPONENT = ("Toolkit", "General")
 
 UNIFIED_SOURCES += [
-	"content_analysis/sdk/analysis.pb.cc",
-	"ContentAnalysis.cpp",
+    "content_analysis/sdk/analysis.pb.cc",
+    "ContentAnalysis.cpp",
 ]
 
 UNIFIED_SOURCES += [
     "../../../third_party/content_analysis_sdk/browser/src/client_base.cc",
 ]
+
+EXPORTS += ["ContentAnalysis.h"]
 
 if CONFIG["OS_ARCH"] == "WINNT":
     UNIFIED_SOURCES += [
@@ -31,13 +33,13 @@ else:
     ]
 
 LOCAL_INCLUDES += [
-	"../../../third_party/content_analysis_sdk",
-	"../../../third_party/content_analysis_sdk/browser/include",
-	"content_analysis/sdk/",
+    "../../../third_party/content_analysis_sdk",
+    "../../../third_party/content_analysis_sdk/browser/include",
+    "content_analysis/sdk/",
 ]
 
 XPIDL_SOURCES += [
-	"nsIContentAnalysis.idl",
+    "nsIContentAnalysis.idl",
 ]
 
 XPIDL_MODULE = "toolkit_contentanalysis"

@@ -37,6 +37,8 @@ class nsChannelClassifier final : public nsIURIClassifierCallback,
   bool mIsAllowListed;
   // True if the channel has been suspended.
   bool mSuspendedChannel;
+  bool mWaitingForClassifier;
+  int mNumberOfPendingContentAnalyses;
   nsCOMPtr<nsIChannel> mChannel;
 
   ~nsChannelClassifier();
@@ -48,9 +50,10 @@ class nsChannelClassifier final : public nsIURIClassifierCallback,
   // from the classifier service.
   nsresult StartInternal();
   nsresult GatherFileInputStreams(
-      nsIChannel* aChannel, nsTArray<nsCOMPtr<nsIFileInputStream>> & aStreams);
+      nsIChannel* aChannel, nsTArray<nsCOMPtr<nsIFileInputStream>>& aStreams);
   nsresult GatherFileInputStreams(
-      nsIInputStream* aInputStream, nsTArray<nsCOMPtr<nsIFileInputStream>> & aStreams);
+      nsIInputStream* aInputStream,
+      nsTArray<nsCOMPtr<nsIFileInputStream>>& aStreams);
   // Helper function to check a URI against the hostname entitylist
   bool IsHostnameEntitylisted(nsIURI* aUri, const nsACString& aEntitylisted);
 

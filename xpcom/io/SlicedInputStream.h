@@ -15,12 +15,14 @@
 #include "nsIIPCSerializableInputStream.h"
 #include "nsISeekableStream.h"
 #include "nsIInputStreamLength.h"
+#include "nsIInputStreamWrapper.h"
 
 namespace mozilla {
 
 // A wrapper for a slice of an underlying input stream.
 
 class SlicedInputStream final : public nsIAsyncInputStream,
+                                public nsIInputStreamWrapper,
                                 public nsICloneableInputStream,
                                 public nsIIPCSerializableInputStream,
                                 public nsISeekableStream,
@@ -31,6 +33,7 @@ class SlicedInputStream final : public nsIAsyncInputStream,
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
   NS_DECL_NSIINPUTSTREAM
+  NS_DECL_NSIINPUTSTREAMWRAPPER
   NS_DECL_NSIASYNCINPUTSTREAM
   NS_DECL_NSICLONEABLEINPUTSTREAM
   NS_DECL_NSIIPCSERIALIZABLEINPUTSTREAM

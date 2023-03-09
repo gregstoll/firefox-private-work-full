@@ -6,6 +6,7 @@
 
 #include "nsChannelClassifier.h"
 
+#include "ContentAnalysis.h"
 #include "nsCharSeparatedTokenizer.h"
 #include "nsIBufferedStreams.h"
 #include "nsICacheEntry.h"
@@ -13,6 +14,7 @@
 #include "nsIChannel.h"
 #include "nsIContentAnalysis.h"
 #include "nsIInputStream.h"
+#include "nsIInputStreamWrapper.h"
 #include "nsIMultiplexInputStream.h"
 #include "nsIObserverService.h"
 #include "nsIProtocolHandler.h"
@@ -114,7 +116,10 @@ CachedPrefs::~CachedPrefs() {
 NS_IMPL_ISUPPORTS(nsChannelClassifier, nsIURIClassifierCallback, nsIObserver)
 
 nsChannelClassifier::nsChannelClassifier(nsIChannel* aChannel)
-    : mIsAllowListed(false), mSuspendedChannel(false), mChannel(aChannel) {
+    : mIsAllowListed(false),
+      mWaitingForClassifier(false),
+      mNumberOfPendingContentAnalyses(0),
+      mChannel(aChannel) {
   UC_LOG_LEAK(("nsChannelClassifier::nsChannelClassifier [this=%p]", this));
   MOZ_ASSERT(mChannel);
 }
@@ -179,25 +184,33 @@ nsresult nsChannelClassifier::StartInternal() {
   if (hasFlags) return NS_ERROR_UNEXPECTED;
 
   // TODO hacky, needs better error handling, etc.
-  nsCOMPtr<nsIContentAnalysis> contentAnalysis = mozilla::components::nsIContentAnalysis::Service(&rv);
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      mozilla::components::nsIContentAnalysis::Service(&rv);
   NS_ENSURE_SUCCESS(rv, rv);
   bool contentAnalysisIsActive = false;
   rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
   NS_ENSURE_SUCCESS(rv, rv);
-  // TODO just for testing
-  if (contentAnalysisIsActive || true) {
+  if (contentAnalysisIsActive) {
     nsTArray<nsCOMPtr<nsIFileInputStream>> streams;
     rv = GatherFileInputStreams(mChannel, streams);
     NS_ENSURE_SUCCESS(rv, rv);
     for (nsCOMPtr<nsIFileInputStream>& fileInputStream : streams) {
-      nsCOMPtr<nsIFile> file;
-      rv = fileInputStream->GetFile(getter_AddRefs(file));
-      NS_ENSURE_SUCCESS(rv, rv);
       nsAutoString filePath;
-      rv = file->GetPath(filePath);
+      rv = fileInputStream->GetFilePath(filePath);
       NS_ENSURE_SUCCESS(rv, rv);
+      // TODO - get digest
+      // TODO - is FILE_ATTACHED right?
+      nsAutoCString urlString;
+      uri->GetSpec(urlString);
+      NS_ENSURE_SUCCESS(rv, rv);
+      nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+          new mozilla::contentanalysis::ContentAnalysisRequest(
+              nsIContentAnalysisRequest::FILE_ATTACHED, std::move(filePath),
+              true, NS_ConvertUTF8toUTF16(urlString)));
+      //rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest,
+      //                                           nullptr, nullptr);
     }
-  } 
+  }
 
   nsCString exceptionHostnames =
       CachedPrefs::GetInstance()->GetExceptionHostnames();
@@ -261,7 +274,7 @@ nsresult nsChannelClassifier::StartInternal() {
       return rv;
     }
 
-    mSuspendedChannel = true;
+    mWaitingForClassifier = true;
     UC_LOG(
         ("nsChannelClassifier::StartInternal - suspended channel %p [this=%p]",
          mChannel.get(), this));
@@ -278,7 +291,7 @@ nsresult nsChannelClassifier::StartInternal() {
 }
 
 nsresult nsChannelClassifier::GatherFileInputStreams(
-  nsIChannel* aChannel, nsTArray<nsCOMPtr<nsIFileInputStream>>& aStreams) {
+    nsIChannel* aChannel, nsTArray<nsCOMPtr<nsIFileInputStream>>& aStreams) {
   nsCOMPtr<nsIUploadChannel2> uploadChannel(do_QueryInterface(aChannel));
   nsresult rv = NS_OK;
   if (uploadChannel) {
@@ -324,7 +337,16 @@ nsresult nsChannelClassifier::GatherFileInputStreams(
     NS_ENSURE_SUCCESS(rv, rv);
     return GatherFileInputStreams(bufferedInnerStream, aStreams);
   }
-  // TODO handle SlicedInputStream somehow
+
+  nsCOMPtr<nsIInputStreamWrapper> inputStreamWrapper(
+      do_QueryInterface(aInputStream));
+  if (inputStreamWrapper) {
+    nsCOMPtr<nsIInputStream> wrappedStream;
+    rv = inputStreamWrapper->GetWrappedStream(getter_AddRefs(wrappedStream));
+    NS_ENSURE_SUCCESS(rv, rv);
+    return GatherFileInputStreams(wrappedStream, aStreams);
+  }
+
   return rv;
 }
 
@@ -470,7 +492,8 @@ nsChannelClassifier::OnClassifyComplete(nsresult aErrorCode,
   MOZ_ASSERT(
       !UrlClassifierFeatureFactory::IsClassifierBlockingErrorCode(aErrorCode));
 
-  if (mSuspendedChannel) {
+  // TODO?
+  if (mWaitingForClassifier) {
     MarkEntryClassified(aErrorCode);
 
     if (NS_FAILED(aErrorCode)) {
@@ -543,8 +566,10 @@ nsChannelClassifier::Observe(nsISupports* aSubject, const char* aTopic,
     // If we aren't getting a callback for any reason, make sure
     // we resume the channel.
 
-    if (mChannel && mSuspendedChannel) {
-      mSuspendedChannel = false;
+    if (mChannel &&
+        (mWaitingForClassifier || mNumberOfPendingContentAnalyses > 0)) {
+      mWaitingForClassifier = false;
+      mNumberOfPendingContentAnalyses = 0;
       mChannel->Cancel(NS_ERROR_ABORT);
       mChannel->Resume();
       mChannel = nullptr;

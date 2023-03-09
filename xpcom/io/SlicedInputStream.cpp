@@ -20,6 +20,7 @@ NS_IMPL_RELEASE(SlicedInputStream);
 
 NS_INTERFACE_MAP_BEGIN(SlicedInputStream)
   NS_INTERFACE_MAP_ENTRY(nsIInputStream)
+  NS_INTERFACE_MAP_ENTRY(nsIInputStreamWrapper)
   NS_INTERFACE_MAP_ENTRY_CONDITIONAL(nsICloneableInputStream,
                                      mWeakCloneableInputStream || !mInputStream)
   NS_INTERFACE_MAP_ENTRY_CONDITIONAL(
@@ -293,6 +294,15 @@ SlicedInputStream::Clone(nsIInputStream** aResult) {
       new SlicedInputStream(clonedStream.forget(), mStart, mLength);
 
   sis.forget(aResult);
+  return NS_OK;
+}
+
+// nsIInputStreamWrapper interface
+
+NS_IMETHODIMP
+SlicedInputStream::GetWrappedStream(nsIInputStream** aInputStream) {
+  nsCOMPtr<nsIInputStream> inputStream = mInputStream;
+  inputStream.forget(aInputStream);
   return NS_OK;
 }
 
