@@ -88,6 +88,8 @@
 #include "nsIRadioGroupContainer.h"
 
 // input type=file
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
 #include "mozilla/dom/FileSystemEntry.h"
 #include "mozilla/dom/FileSystem.h"
 #include "mozilla/dom/File.h"
@@ -813,7 +815,7 @@ nsresult HTMLInputElement::InitFilePicker(FilePickerType aType) {
     mode = nsIFilePicker::modeOpen;
   }
 
-  nsresult rv = filePicker->Init(win, title, mode);
+  nsresult rv = filePicker->Init(win, OwnerDoc(), title, mode);
   NS_ENSURE_SUCCESS(rv, rv);
 
   if (!okButtonLabel.IsEmpty()) {

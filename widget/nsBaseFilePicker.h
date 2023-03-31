@@ -10,6 +10,7 @@
 #include "nsISupports.h"
 #include "nsIFilePicker.h"
 #include "nsISimpleEnumerator.h"
+#include "nsPIDOMWindow.h"
 #include "nsArrayEnumerator.h"
 #include "nsCOMPtr.h"
 #include "nsString.h"
@@ -25,7 +26,7 @@ class nsBaseFilePicker : public nsIFilePicker {
   nsBaseFilePicker();
   virtual ~nsBaseFilePicker();
 
-  NS_IMETHOD Init(mozIDOMWindowProxy* aParent, const nsAString& aTitle,
+  NS_IMETHOD Init(mozIDOMWindowProxy* aParent, mozilla::dom::Document* aOwnerDoc, const nsAString& aTitle,
                   nsIFilePicker::Mode aMode) override;
 
   NS_IMETHOD Open(nsIFilePickerShownCallback* aCallback) override;
@@ -60,6 +61,8 @@ class nsBaseFilePicker : public nsIFilePicker {
   nsString mDisplaySpecialDirectory;
 
   nsCOMPtr<nsPIDOMWindowOuter> mParent;
+  nsCOMPtr<nsPIDOMWindowInner> mInnerWindow;
+  nsString mDocumentURIString;
   nsIFilePicker::Mode mMode;
   nsString mOkButtonLabel;
   nsTArray<nsString> mRawFilters;
