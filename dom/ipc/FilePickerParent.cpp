@@ -223,7 +223,8 @@ bool FilePickerParent::CreateFilePicker() {
     return false;
   }
 
-  Element* element = BrowserParent::GetFrom(Manager())->GetOwnerElement();
+  BrowserParent* browserParent = BrowserParent::GetFrom(Manager());
+  Element* element = browserParent->GetOwnerElement();
   if (!element) {
     return false;
   }
@@ -232,8 +233,9 @@ bool FilePickerParent::CreateFilePicker() {
   if (!window) {
     return false;
   }
+  Document* ownerDoc = element->OwnerDoc();
 
-  return NS_SUCCEEDED(mFilePicker->Init(window, mTitle, mMode));
+  return NS_SUCCEEDED(mFilePicker->Init(window, ownerDoc, mTitle, mMode));
 }
 
 mozilla::ipc::IPCResult FilePickerParent::RecvOpen(

@@ -10,6 +10,7 @@ interface nsIFile;
 interface nsIURI;
 interface mozIDOMWindowProxy;
 interface nsISimpleEnumerator;
+webidl Document;
 
 // Declared in this file, below.
 interface nsIFilePickerShownCallback;
@@ -66,11 +67,12 @@ interface nsIFilePicker : nsISupports
   *
   * @param      parent   mozIDOMWindow parent.  This dialog will be dependent
   *                      on this parent. parent must be non-null.
+  * @param      ownerDoc The owning Document that is requesting the file picker.
   * @param      title    The title for the file widget
   * @param      mode     load, save, or get folder
   *
   */
-  void init(in mozIDOMWindowProxy parent, in AString title, in nsIFilePicker_Mode mode);
+    void init(in mozIDOMWindowProxy parent, in Document ownerDoc, in AString title, in nsIFilePicker_Mode mode);
 
  /**
   * Append to the  filter list with things from the predefined list
@@ -99,6 +101,8 @@ interface nsIFilePicker : nsISupports
    *
    */
   void appendRawFilter(in AString filter);
+
+  void removeFile(in nsIFile file);
 
  /**
   * The filename that should be suggested to the user as a default. This should
