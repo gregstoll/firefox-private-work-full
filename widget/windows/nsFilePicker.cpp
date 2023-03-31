@@ -69,13 +69,14 @@ nsFilePicker::nsFilePicker() : mSelectedType(1) {}
 NS_IMPL_ISUPPORTS(nsFilePicker, nsIFilePicker)
 
 NS_IMETHODIMP nsFilePicker::Init(mozIDOMWindowProxy* aParent,
+                                 mozilla::dom::Document* aOwnerDoc,
                                  const nsAString& aTitle,
                                  nsIFilePicker::Mode aMode) {
   nsCOMPtr<nsPIDOMWindowOuter> window = do_QueryInterface(aParent);
   nsIDocShell* docShell = window ? window->GetDocShell() : nullptr;
   mLoadContext = do_QueryInterface(docShell);
 
-  return nsBaseFilePicker::Init(aParent, aTitle, aMode);
+  return nsBaseFilePicker::Init(aParent, aOwnerDoc, aTitle, aMode);
 }
 
 /*
@@ -361,6 +362,28 @@ nsFilePicker::GetFile(nsIFile** aFile) {
   file.forget(aFile);
   return NS_OK;
 }
+
+NS_IMETHODIMP nsFilePicker::RemoveFile(nsIFile* aFile) {
+  if (!mUnicodeFile.IsEmpty()) {
+    nsCOMPtr<nsIFile> file;
+    nsresult rv = GetFile(getter_AddRefs(file));
+    if (!file) return rv;
+    bool equal = false;
+    rv = aFile->Equals(file, &equal);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+    if (!equal) {
+      return NS_ERROR_FILE_NOT_FOUND;
+    }
+    mUnicodeFile.SetLength(0);
+    return NS_OK;
+  }
+
+  // TODO - handle mFiles case
+  return NS_ERROR_FILE_NOT_FOUND;
+}
+
 
 NS_IMETHODIMP
 nsFilePicker::GetFileURL(nsIURI** aFileURL) {
