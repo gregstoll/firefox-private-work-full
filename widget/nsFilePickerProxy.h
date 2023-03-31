@@ -48,6 +48,7 @@ class nsFilePickerProxy : public nsBaseFilePicker,
   NS_IMETHOD GetFile(nsIFile** aFile) override;
   NS_IMETHOD GetFileURL(nsIURI** aFileURL) override;
   NS_IMETHOD GetFiles(nsISimpleEnumerator** aFiles) override;
+  NS_IMETHOD RemoveFile(nsIFile* aFile) override;
 
   NS_IMETHOD GetDomFileOrDirectory(nsISupports** aValue) override;
   NS_IMETHOD GetDomFileOrDirectoryEnumerator(

@@ -88,6 +88,8 @@
 #include "nsIRadioGroupContainer.h"
 
 // input type=file
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
 #include "mozilla/dom/FileSystemEntry.h"
 #include "mozilla/dom/FileSystem.h"
 #include "mozilla/dom/File.h"

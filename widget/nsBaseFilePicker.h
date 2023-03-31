@@ -10,6 +10,7 @@
 #include "nsISupports.h"
 #include "nsIFilePicker.h"
 #include "nsISimpleEnumerator.h"
+#include "nsPIDOMWindow.h"
 #include "nsArrayEnumerator.h"
 #include "nsCOMPtr.h"
 #include "nsString.h"
@@ -60,6 +61,8 @@ class nsBaseFilePicker : public nsIFilePicker {
   nsString mDisplaySpecialDirectory;
 
   nsCOMPtr<nsPIDOMWindowOuter> mParent;
+  nsCOMPtr<nsPIDOMWindowInner> mInnerWindow;
+  nsString mDocumentURIString;
   nsIFilePicker::Mode mMode;
   nsString mOkButtonLabel;
   nsTArray<nsString> mRawFilters;

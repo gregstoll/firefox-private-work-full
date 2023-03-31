@@ -223,7 +223,8 @@ bool FilePickerParent::CreateFilePicker() {
     return false;
   }
 
-  Element* element = BrowserParent::GetFrom(Manager())->GetOwnerElement();
+  BrowserParent* browserParent = BrowserParent::GetFrom(Manager());
+  Element* element = browserParent->GetOwnerElement();
   if (!element) {
     return false;
   }

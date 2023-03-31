@@ -24,7 +24,8 @@ nsFilePickerProxy::nsFilePickerProxy()
 nsFilePickerProxy::~nsFilePickerProxy() = default;
 
 NS_IMETHODIMP
-nsFilePickerProxy::Init(mozIDOMWindowProxy* aParent, const nsAString& aTitle,
+nsFilePickerProxy::Init(mozIDOMWindowProxy* aParent, 
+                        const nsAString& aTitle,
                         nsIFilePicker::Mode aMode) {
   BrowserChild* browserChild = BrowserChild::GetFrom(aParent);
   if (!browserChild) {
@@ -192,6 +193,26 @@ mozilla::ipc::IPCResult nsFilePickerProxy::Recv__delete__(
   }
 
   return IPC_OK();
+}
+
+NS_IMETHODIMP
+nsFilePickerProxy::RemoveFile(nsIFile* aFile) {
+  // I don't think we need this?
+  MOZ_ASSERT(false, "GetFileURL is unimplemented; use GetDomFileOrDirectory");
+  return NS_ERROR_FAILURE;
+  /* for (size_t i = 0; i < mFilesOrDirectories.Length(); ++i) {
+    if (mFilesOrDirectories[i].IsFile()) {
+      const auto& currentFile = mFilesOrDirectories[i].GetAsFile();
+      bool isEqual = false;
+      nsresult rv = aFile->Equals(*currentFile, &isEqual);
+      MOZ_ASSERT(NS_SUCCEEDED(rv));
+      if (isEqual) {
+        mFilesOrDirectories.RemoveElementAt(i);
+        return NS_OK;
+      }
+    }
+  }
+  return NS_ERROR_FILE_NOT_FOUND;*/
 }
 
 NS_IMETHODIMP
