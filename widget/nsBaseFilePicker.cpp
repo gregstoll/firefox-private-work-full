@@ -15,11 +15,22 @@
 #include "nsIFile.h"
 #include "nsEnumeratorUtils.h"
 #include "mozilla/dom/Directory.h"
+#include "mozilla/dom/Document.h"
 #include "mozilla/dom/File.h"
+#include "mozilla/dom/Promise.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
 #include "mozilla/Components.h"
 #include "WidgetUtils.h"
 #include "nsSimpleEnumerator.h"
 #include "nsThreadUtils.h"
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
+#include "nsQueryObject.h"
+#include "js/PropertyAndElement.h"
+#include "mozilla/Atomics.h"
+#include "nsGlobalWindowInner.h"
+#include "ScopedNSSTypes.h"
+#include "GMPUtils.h"
 
 #include "nsBaseFilePicker.h"
 
@@ -61,6 +72,70 @@ nsresult LocalFileToDirectoryOrBlob(nsPIDOMWindowInner* aWindow,
 
 }  // anonymous namespace
 
+class ContentAnalysisPromiseListener : public PromiseNativeHandler {
+ public:
+  NS_DECL_ISUPPORTS
+  ContentAnalysisPromiseListener(nsBaseFilePicker* aFilePicker,
+                                 nsIFilePickerShownCallback* aCallback,
+                                 nsIFile* aFile,
+                                 nsIFilePicker::ResultCode aResult,
+                                 mozilla::dom::Promise* aContentAnalysisPromise)
+      : mFilePicker(aFilePicker),
+        mCallback(aCallback),
+        mFile(aFile),
+        mResult(aResult),
+        mContentAnalysisPromise(aContentAnalysisPromise) {}
+
+  virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // TODO synchronization
+    // TODO error checking
+    if (aValue.isObject()) {
+      auto* obj = aValue.toObjectOrNull();
+      // TODO is this handle thing ok?
+      JS::Handle<JSObject*> handle =
+          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+      JS::Rooted<JS::Value> actionValue(aCx);
+      // JS_HasProperty(aCx, handle, "action", &found);
+      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+        if (actionValue.isNumber()) {
+          double actionNumber = actionValue.toNumber();
+          if (actionNumber ==
+              static_cast<double>(nsIContentAnalysisResponse::BLOCK)) {
+            mFilePicker->RemoveFile(mFile);
+          }
+        }
+      }
+    }
+    if (mCallback) {
+      mCallback->Done(mResult);
+    }
+    mContentAnalysisPromise->Release();
+  }
+
+  virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // remove this entry
+    // TODO synchronization
+    // TODO error checking
+    mFilePicker->RemoveFile(mFile);
+    if (mCallback) {
+      mCallback->Done(mResult);
+    }
+    mContentAnalysisPromise->Release();
+  }
+
+ private:
+  ~ContentAnalysisPromiseListener() = default;
+  RefPtr<nsBaseFilePicker> mFilePicker;
+  RefPtr<nsIFilePickerShownCallback> mCallback;
+  RefPtr<nsIFile> mFile;
+  nsIFilePicker::ResultCode mResult;
+  mozilla::dom::Promise* mContentAnalysisPromise;
+};
+
+NS_IMPL_ISUPPORTS0(ContentAnalysisPromiseListener)
+
 /**
  * A runnable to dispatch from the main thread to the main thread to display
  * the file picker while letting the showAsync method return right away.
@@ -85,9 +160,72 @@ class nsBaseFilePicker::AsyncShowFilePicker : public mozilla::Runnable {
     if (NS_FAILED(rv)) {
       NS_ERROR("FilePicker's Show() implementation failed!");
     }
+    // TODO - is this a race condition? Can running JS query this while we're waiting for a response?
 
-    if (mCallback) {
-      mCallback->Done(result);
+    nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+        mozilla::components::nsIContentAnalysis::Service(&rv);
+    NS_ENSURE_SUCCESS(rv, rv);
+    bool contentAnalysisIsActive = false;
+    rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+    NS_ENSURE_SUCCESS(rv, rv);
+    bool waitForPromise = false;
+    mozilla::dom::Promise* promise = nullptr;
+    if (contentAnalysisIsActive && result == nsIFilePicker::returnOK) {
+      nsCOMPtr<nsIFile> file;
+      // TODO handle directories
+      //nsresult rv = mFilePicker->GetDomFileOrDirectory(getter_AddRefs(tmp));
+      nsresult rv = mFilePicker->GetFile(getter_AddRefs(file));
+      mozilla::PathString filePath = file->NativePath();
+
+      nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+          mozilla::components::nsIContentAnalysis::Service(&rv);
+      NS_ENSURE_SUCCESS(rv, rv);
+      AutoEntryScript aes(nsGlobalWindowInner::Cast(mFilePicker->mInnerWindow), "call content analysis");
+
+      // TODO handle error
+      // TODO - is FILE_ATTACHED right?
+      nsString uriString = mFilePicker->mDocumentURIString;
+      mozilla::Digest digest;
+      digest.Begin(SEC_OID_SHA256);
+      PRFileDesc* fd = nullptr;
+      rv = file->OpenNSPRFileDesc(PR_RDONLY | nsIFile::OS_READAHEAD, 0, &fd);
+      NS_ENSURE_SUCCESS(rv, rv);
+      // TODO - is this too small? Or is there a better way to do this?
+      uint8_t buffer[4096];
+      PRInt32 bytesRead;
+      bytesRead = PR_Read(fd, buffer, sizeof(buffer)/sizeof(uint8_t));
+      while (bytesRead != 0) {
+        if (bytesRead == -1) {
+          PR_Close(fd);
+          return NS_ErrorAccordingToNSPR();
+        }
+        digest.Update(mozilla::Span<const uint8_t>(buffer, bytesRead));
+        bytesRead = PR_Read(fd, buffer, sizeof(buffer)/sizeof(uint8_t));
+      }
+      PR_Close(fd);
+      nsTArray<uint8_t> digestResults;
+      rv = digest.End(digestResults);
+      NS_ENSURE_SUCCESS(rv, rv);
+      nsCString digestString = mozilla::ToHexString(digestResults);
+      nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+          new mozilla::contentanalysis::ContentAnalysisRequest(
+              nsIContentAnalysisRequest::FILE_ATTACHED, std::move(filePath),
+              true, std::move(digestString), std::move(uriString)));
+      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest,
+                                                  aes.cx(), &promise);
+      // TODO - better handling
+      if (NS_SUCCEEDED(rv)) {
+        RefPtr<ContentAnalysisPromiseListener> listener = new ContentAnalysisPromiseListener(
+            mFilePicker, mCallback, file, result, promise);
+        waitForPromise = true;
+        promise->AppendNativeHandler(listener);
+      }
+    }
+
+    if (!waitForPromise) {
+      if (mCallback) {
+        mCallback->Done(result);
+      }
     }
     return NS_OK;
   }
@@ -155,9 +293,18 @@ NS_IMETHODIMP nsBaseFilePicker::Init(mozIDOMWindowProxy* aParent,
              "picker for you!");
 
   mParent = nsPIDOMWindowOuter::From(aParent);
+  Document* ownerDoc = mParent->GetExtantDoc();
 
   nsCOMPtr<nsIWidget> widget = WidgetUtils::DOMWindowToWidget(mParent);
   NS_ENSURE_TRUE(widget, NS_ERROR_FAILURE);
+  mInnerWindow = ownerDoc->GetInnerWindow();
+
+  if (widget->GetInputContext().mURI) {
+    nsAutoCString documentURIString;
+    nsresult rv = widget->GetInputContext().mURI->GetSpec(documentURIString);
+    NS_ENSURE_SUCCESS(rv, rv);
+    mDocumentURIString = NS_ConvertUTF8toUTF16(documentURIString);
+  }
 
   mMode = aMode;
   InitNative(widget, aTitle);
