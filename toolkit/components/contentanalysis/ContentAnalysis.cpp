@@ -66,6 +66,49 @@ namespace contentanalysis {
 LazyLogModule gContentAnalysisLog("contentanalysis");
 #define LOGD(...) MOZ_LOG(gContentAnalysisLog, LogLevel::Debug, (__VA_ARGS__))
 
+NS_IMETHODIMP
+ContentAnalysisRequest::GetAnalysisType(uint32_t* aAnalysisType) {
+  *aAnalysisType = mAnalysisType;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysisRequest::GetTextContent(nsAString& aTextContent) {
+  aTextContent = mTextContent;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysisRequest::GetFilePath(nsAString& aFilePath) {
+  aFilePath = mFilePath;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysisRequest::GetUrl(nsAString& aUrl) {
+  aUrl = mUrl;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysisRequest::GetEmail(nsAString& aEmail) {
+  aEmail = mEmail;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysisRequest::GetSha256Digest(nsACString& aSha256Digest) {
+  aSha256Digest = mSha256Digest;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysisRequest::GetResources(
+    nsTArray<RefPtr<nsIClientDownloadResource>>& aResources) {
+  aResources = mResources.Clone();
+  return NS_OK;
+}
+
 /* static */
 StaticDataMutex<UniquePtr<content_analysis::sdk::Client>>
     ContentAnalysis::sCaClient("ContentAnalysisClient");
@@ -83,6 +126,19 @@ nsresult ContentAnalysis::EnsureContentAnalysisClient() {
       content_analysis::sdk::Client::Create({kPipeName, kIsPerUser}).release());
   LOGD("Content analysis is %s", caClient ? "connected" : "not available");
   return caClient ? NS_OK : NS_ERROR_NOT_AVAILABLE;
+}
+
+ContentAnalysisRequest::ContentAnalysisRequest(unsigned long aAnalysisType,
+                                               nsAString&& aString,
+                                               bool aStringIsFilePath,
+                                               nsACString&& aSha256Digest,
+                                               nsAString&& aUrl)
+    : mAnalysisType(aAnalysisType), mUrl(aUrl), mSha256Digest(aSha256Digest) {
+  if (aStringIsFilePath) {
+    mFilePath = aString;
+  } else {
+    mTextContent = aString;
+  }
 }
 
 static nsresult ConvertToProtobuf(
@@ -392,6 +448,7 @@ void ContentAnalysisResponse::SetOwner(RefPtr<ContentAnalysis> aOwner) {
   mOwner = aOwner;
 }
 
+NS_IMPL_ISUPPORTS(ContentAnalysisRequest, nsIContentAnalysisRequest);
 NS_IMPL_ISUPPORTS(ContentAnalysisResponse, nsIContentAnalysisResponse);
 NS_IMPL_ISUPPORTS(ContentAnalysis, nsIContentAnalysis);
 
