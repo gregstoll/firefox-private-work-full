@@ -3,6 +3,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 include protocol PContent;
+include protocol PBrowser;
 
 include DOMTypes;
 include IPCTransferable;
@@ -16,7 +17,7 @@ protocol PClipboardWriteRequest {
   manager PContent;
 
  parent:
-  async SetData(IPCTransferable aTransferable);
+  async SetData(IPCTransferable aTransferable, nullable PBrowser aBrowser);
 
  both:
   async __delete__(nsresult aResult);

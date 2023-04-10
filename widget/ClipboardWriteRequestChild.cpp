@@ -11,6 +11,8 @@
 #include "mozilla/dom/ContentChild.h"
 #include "mozilla/net/CookieJarSettings.h"
 #include "nsITransferable.h"
+#include "mozilla/dom/BrowserChild.h"
+#include "mozilla/dom/Document.h"
 
 namespace mozilla {
 
@@ -18,7 +20,8 @@ NS_IMPL_ISUPPORTS(ClipboardWriteRequestChild, nsIAsyncSetClipboardData)
 
 NS_IMETHODIMP
 ClipboardWriteRequestChild::SetData(nsITransferable* aTransferable,
-                                    nsIClipboardOwner* aOwner) {
+                                    nsIClipboardOwner* aOwner,
+                                    dom::ClipboardDocumentSource aSource) {
   MOZ_ASSERT(aTransferable);
   // Callback should be notified if actor is destroyed.
   MOZ_ASSERT_IF(!CanSend(), !mIsValid && !mCallback);
@@ -35,7 +38,12 @@ ClipboardWriteRequestChild::SetData(nsITransferable* aTransferable,
   IPCTransferable ipcTransferable;
   nsContentUtils::TransferableToIPCTransferable(aTransferable, &ipcTransferable,
                                                 false, nullptr);
-  SendSetData(std::move(ipcTransferable));
+  dom::BrowserChild* browserChild = nullptr;
+  if (aSource.is<dom::Document*>()) {
+    browserChild =
+        dom::BrowserChild::GetFrom(aSource.as<dom::Document*>()->GetDocShell());
+  }
+  SendSetData(std::move(ipcTransferable), browserChild);
   return NS_OK;
 }
 

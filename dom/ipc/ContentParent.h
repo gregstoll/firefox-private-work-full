@@ -979,7 +979,8 @@ class ContentParent final : public PContentParent,
   mozilla::ipc::IPCResult RecvGetGfxVars(nsTArray<GfxVarUpdate>* aVars);
 
   mozilla::ipc::IPCResult RecvSetClipboard(const IPCTransferable& aTransferable,
-                                           const int32_t& aWhichClipboard);
+                                           const int32_t& aWhichClipboard,
+                                           PBrowserParent* aBrowser);
 
   mozilla::ipc::IPCResult RecvGetClipboard(
       nsTArray<nsCString>&& aTypes, const int32_t& aWhichClipboard,

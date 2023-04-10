@@ -329,7 +329,8 @@ static nsresult PutToClipboard(
   rv = CreateTransferable(aEncodedDocumentWithContext, aDocument, transferable);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  rv = clipboard->SetData(transferable, nullptr, aClipboardID);
+  mozilla::dom::ClipboardDocumentSource source = AsVariant(&aDocument);
+  rv = clipboard->SetData(transferable, nullptr, aClipboardID, source);
   NS_ENSURE_SUCCESS(rv, rv);
 
   return rv;
@@ -518,11 +519,13 @@ nsresult nsCopySupport::ImageCopy(nsIImageLoadingContent* aImageElement,
   // check whether the system supports the selection clipboard or not.
   if (clipboard->IsClipboardTypeSupported(nsIClipboard::kSelectionClipboard)) {
     // put the transferable on the clipboard
-    rv = clipboard->SetData(trans, nullptr, nsIClipboard::kSelectionClipboard);
+    rv = clipboard->SetData(trans, nullptr, nsIClipboard::kSelectionClipboard,
+                            /* TODO?? */ AsVariant(Nothing()));
     NS_ENSURE_SUCCESS(rv, rv);
   }
 
-  return clipboard->SetData(trans, nullptr, nsIClipboard::kGlobalClipboard);
+  return clipboard->SetData(trans, nullptr, nsIClipboard::kGlobalClipboard,
+                            /* TODO?? */ AsVariant(Nothing()));
 }
 
 static nsresult AppendString(nsITransferable* aTransferable,
@@ -888,7 +891,9 @@ bool nsCopySupport::FireClipboardEvent(EventMessage aEventMessage,
       NS_ENSURE_TRUE(transferable, false);
 
       // put the transferable on the clipboard
-      nsresult rv = clipboard->SetData(transferable, nullptr, aClipboardType);
+      Document* docPtr = doc.get();
+      nsresult rv = clipboard->SetData(transferable, nullptr, aClipboardType,
+                                       AsVariant(docPtr));
       if (NS_FAILED(rv)) {
         return false;
       }

@@ -11,6 +11,7 @@
 #include "nsIClipboard.h"
 #include "nsITransferable.h"
 #include "nsWidgetsCID.h"
+#include "mozilla/dom/BrowserParent.h"
 
 static NS_DEFINE_CID(kCClipboardCID, NS_CLIPBOARD_CID);
 
@@ -55,7 +56,7 @@ NS_IMETHODIMP ClipboardWriteRequestParent::OnComplete(nsresult aResult) {
 }
 
 IPCResult ClipboardWriteRequestParent::RecvSetData(
-    const IPCTransferable& aTransferable) {
+    const IPCTransferable& aTransferable, PBrowserParent* aBrowser) {
   if (!mManager->ValidatePrincipal(
           aTransferable.requestingPrincipal(),
           {ContentParent::ValidatePrincipalOptions::AllowNullPtr})) {
@@ -84,7 +85,8 @@ IPCResult ClipboardWriteRequestParent::RecvSetData(
     return IPC_OK();
   }
 
-  mAsyncSetClipboardData->SetData(trans, nullptr);
+  auto* browser = static_cast<dom::BrowserParent*>(aBrowser);
+  mAsyncSetClipboardData->SetData(trans, nullptr, AsVariant(browser));
   return IPC_OK();
 }
 

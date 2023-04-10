@@ -695,7 +695,7 @@ already_AddRefed<Promise> Clipboard::Write(
 
   GetClipboardNativeItem(aData[0])->Then(
       GetMainThreadSerialEventTarget(), __func__,
-      [owner, request, context, principal = RefPtr{&aSubjectPrincipal}](
+      [doc, owner, request, context, principal = RefPtr{&aSubjectPrincipal}](
           const nsTArray<NativeEntry>& aEntries) {
         RefPtr<DataTransfer> dataTransfer =
             new DataTransfer(owner, eCopy,
@@ -721,7 +721,8 @@ already_AddRefed<Promise> Clipboard::Write(
         }
 
         // Finally write data to clipboard
-        request->SetData(transferable, /* clipboard owner */ nullptr);
+        request->SetData(transferable, /* clipboard owner */ nullptr,
+                         AsVariant(doc));
       },
       [p, request](const CopyableErrorResult& aErrorResult) {
         p->MaybeReject(CopyableErrorResult(aErrorResult));

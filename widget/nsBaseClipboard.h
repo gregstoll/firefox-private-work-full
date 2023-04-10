@@ -22,6 +22,11 @@ static mozilla::LazyLogModule sWidgetClipboardLog("WidgetClipboard");
 class nsITransferable;
 class nsIClipboardOwner;
 class nsIWidget;
+namespace mozilla {
+namespace dom {
+class BrowserParent;
+}
+}  // namespace mozilla
 
 /**
  * A helper base class to implement nsIClipboard::SetData/AsyncSetData, so that
@@ -39,7 +44,8 @@ class ClipboardSetDataHelper : public nsIClipboard {
 
   // nsIClipboard
   NS_IMETHOD SetData(nsITransferable* aTransferable, nsIClipboardOwner* aOwner,
-                     int32_t aWhichClipboard) override;
+                     int32_t aWhichClipboard,
+                     mozilla::dom::ClipboardDocumentSource aSource) override;
   NS_IMETHOD AsyncSetData(int32_t aWhichClipboard,
                           nsIAsyncSetClipboardDataCallback* aCallback,
                           nsIAsyncSetClipboardData** _retval) override final;
@@ -50,7 +56,8 @@ class ClipboardSetDataHelper : public nsIClipboard {
   // Implement the native clipboard behavior.
   NS_IMETHOD SetNativeClipboardData(nsITransferable* aTransferable,
                                     nsIClipboardOwner* aOwner,
-                                    int32_t aWhichClipboard) = 0;
+                                    int32_t aWhichClipboard,
+                                    mozilla::dom::BrowserParent* aBrowser) = 0;
 
   class AsyncSetClipboardData final : public nsIAsyncSetClipboardData {
    public:
@@ -104,7 +111,8 @@ class nsBaseClipboard : public ClipboardSetDataHelper {
 
   // nsIClipboard
   NS_IMETHOD SetData(nsITransferable* aTransferable, nsIClipboardOwner* anOwner,
-                     int32_t aWhichClipboard) override final;
+                     int32_t aWhichClipboard,
+                     mozilla::dom::ClipboardDocumentSource aSource) override final;
   NS_IMETHOD GetData(nsITransferable* aTransferable,
                      int32_t aWhichClipboard) override;
   NS_IMETHOD EmptyClipboard(int32_t aWhichClipboard) override;

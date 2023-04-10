@@ -29,7 +29,8 @@ class ClipboardWriteRequestParent final
 
   nsresult Init(const int32_t& aClipboardType);
 
-  IPCResult RecvSetData(const IPCTransferable& aTransferable);
+  IPCResult RecvSetData(const IPCTransferable& aTransferable,
+                        PBrowserParent* aBrowser);
   IPCResult Recv__delete__(nsresult aReason);
 
   void ActorDestroy(ActorDestroyReason aReason) override final;

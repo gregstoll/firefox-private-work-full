@@ -19,7 +19,8 @@ HeadlessClipboard::HeadlessClipboard()
 NS_IMETHODIMP
 HeadlessClipboard::SetNativeClipboardData(nsITransferable* aTransferable,
                                           nsIClipboardOwner* aOwner,
-                                          int32_t aWhichClipboard) {
+                                          int32_t aWhichClipboard,
+                                          mozilla::dom::BrowserParent* aSource) {
   if (aWhichClipboard != kGlobalClipboard) {
     return NS_ERROR_NOT_IMPLEMENTED;
   }
@@ -39,6 +40,7 @@ HeadlessClipboard::SetNativeClipboardData(nsITransferable* aTransferable,
   }
   nsAutoString utf16string;
   wideString->GetData(utf16string);
+  // TODO - need to do DLP here?
   mClipboard->SetText(utf16string);
 
   return NS_OK;

@@ -47,6 +47,16 @@
 #include "nsMimeTypes.h"
 #include "imgITools.h"
 #include "imgIContainer.h"
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
+#include "nsGlobalWindowInner.h"
+#include "mozilla/Components.h"
+#include "mozilla/dom/AutoEntryScript.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
+#include "mozilla/dom/Document.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsISupportsPrimitives.h"
 
 using mozilla::LogLevel;
 
@@ -477,30 +487,12 @@ static void RepeatedlyTryOleSetClipboard(IDataObject* aDataObj) {
   RepeatedlyTry(::OleSetClipboard, LogOleSetClipboardResult, aDataObj);
 }
 
-//-------------------------------------------------------------------------
-NS_IMETHODIMP nsClipboard::SetNativeClipboardData(
-    nsITransferable* aTransferable, nsIClipboardOwner* aOwner,
-    int32_t aWhichClipboard) {
-  MOZ_LOG(gWin32ClipboardLog, LogLevel::Debug, ("%s", __FUNCTION__));
-
-  if (aWhichClipboard != kGlobalClipboard) {
-    return NS_ERROR_FAILURE;
-  }
-
-  // make sure we have a good transferable
-  if (!aTransferable) {
-    return NS_ERROR_FAILURE;
-  }
-
-#ifdef ACCESSIBILITY
-  mozilla::a11y::Compatibility::SuppressA11yForClipboardCopy();
-#endif
-
+static void FinishCopy(nsCOMPtr<nsITransferable> aTransferable) {
   RefPtr<IDataObject> dataObj;
-  auto mightNeedToFlush = MightNeedToFlush::No;
-  if (NS_SUCCEEDED(CreateNativeDataObject(aTransferable,
-                                          getter_AddRefs(dataObj), nullptr,
-                                          &mightNeedToFlush))) {
+  auto mightNeedToFlush = nsClipboard::MightNeedToFlush::No;
+  if (NS_SUCCEEDED(nsClipboard::CreateNativeDataObject(
+          aTransferable, getter_AddRefs(dataObj), nullptr,
+          &mightNeedToFlush))) {
     RepeatedlyTryOleSetClipboard(dataObj);
 
     const bool doFlush = [&] {
@@ -517,8 +509,8 @@ NS_IMETHODIMP nsClipboard::SetNativeClipboardData(
           // hang, particularly when the a11y cache is disabled. We choose the
           // lesser of the two performance/memory evils here and force immediate
           // rendering.
-          return mightNeedToFlush == MightNeedToFlush::Yes &&
-                 mozilla::NeedsWindows11SuggestedActionsWorkaround();
+          return mightNeedToFlush == nsClipboard::MightNeedToFlush::Yes &&
+                 NeedsWindows11SuggestedActionsWorkaround();
       }
     }();
     if (doFlush) {
@@ -528,7 +520,122 @@ NS_IMETHODIMP nsClipboard::SetNativeClipboardData(
     // Clear the native clipboard
     RepeatedlyTryOleSetClipboard(nullptr);
   }
+}
 
+class ContentAnalysisCopyPromiseListener
+    : public mozilla::dom::PromiseNativeHandler {
+  NS_DECL_ISUPPORTS
+  ContentAnalysisCopyPromiseListener(nsCOMPtr<nsITransferable> aTransferable)
+      : mTransferable(aTransferable) {}
+  virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    if (aValue.isObject()) {
+      auto* obj = aValue.toObjectOrNull();
+      // TODO is this handle thing ok?
+      JS::Handle<JSObject*> handle =
+          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+      JS::RootedValue actionValue(aCx);
+      // JS_HasProperty(aCx, handle, "action", &found);
+      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+        if (actionValue.isNumber()) {
+          double actionNumber = actionValue.toNumber();
+          // TODO - handle WARN case too
+          if (actionNumber ==
+              static_cast<double>(nsIContentAnalysisResponse::ALLOW)) {
+            FinishCopy(mTransferable);
+            return;
+          }
+        }
+      }
+    }
+    // TODO - indicate block to user
+  }
+
+  virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // call to content analysis failed
+    // TODO - indicate error to user
+  }
+
+ private:
+  ~ContentAnalysisCopyPromiseListener() = default;
+  nsCOMPtr<nsITransferable> mTransferable;
+};
+
+NS_IMPL_ISUPPORTS0(ContentAnalysisCopyPromiseListener)
+
+//-------------------------------------------------------------------------
+NS_IMETHODIMP nsClipboard::SetNativeClipboardData(
+    nsITransferable* aTransferable, nsIClipboardOwner* aOwner,
+    int32_t aWhichClipboard, mozilla::dom::BrowserParent* aBrowser) {
+  MOZ_LOG(gWin32ClipboardLog, LogLevel::Debug, ("%s", __FUNCTION__));
+
+  if (aWhichClipboard != kGlobalClipboard) {
+    return NS_ERROR_FAILURE;
+  }
+
+  // make sure we have a good transferable
+  if (!aTransferable) {
+    return NS_ERROR_FAILURE;
+  }
+
+#ifdef ACCESSIBILITY
+  a11y::Compatibility::SuppressA11yForClipboardCopy();
+#endif
+
+  bool handledViaPromise = false;
+  if (aBrowser) {
+    nsresult rv;
+    nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+        mozilla::components::nsIContentAnalysis::Service(&rv);
+    NS_ENSURE_SUCCESS(rv, rv);
+    bool contentAnalysisIsActive = false;
+    rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+    NS_ENSURE_SUCCESS(rv, rv);
+    if (contentAnalysisIsActive) {
+      mozilla::dom::AutoEntryScript aes(
+          nsGlobalWindowInner::Cast(
+              aBrowser->GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
+          "content analysis on clipboard copy");
+      nsAutoCString documentURICString;
+      RefPtr<nsIURI> currentURI =
+          aBrowser->GetBrowsingContext()->GetCurrentURI();
+      rv = currentURI->GetSpec(documentURICString);
+      NS_ENSURE_SUCCESS(rv, rv);
+      nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+      nsCOMPtr<nsISupports> transferData;
+      // TODO - is it OK if this fails? Probably, if there's no text equivalent?
+      rv = aTransferable->GetTransferData(kTextMime,
+                                          getter_AddRefs(transferData));
+      NS_ENSURE_SUCCESS(rv, rv);
+      nsCOMPtr<nsISupportsString> textData = do_QueryInterface(transferData);
+      // TODO - is it OK if this fails? Seems like this shouldn't fail
+      nsString text;
+      if (textData) {
+        rv = textData->GetData(text);
+        NS_ENSURE_SUCCESS(rv, rv);
+      }
+
+      nsCString emptyDigest;
+      // TODO - is BULK_DATA_ENTRY right?
+      nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+          new mozilla::contentanalysis::ContentAnalysisRequest(
+              nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text),
+              false, std::move(emptyDigest), std::move(documentURIString)));
+      mozilla::dom::Promise* promise = nullptr;
+      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest,
+                                                  aes.cx(), &promise);
+      if (NS_SUCCEEDED(rv)) {
+        handledViaPromise = true;
+        RefPtr<ContentAnalysisCopyPromiseListener> listener =
+            new ContentAnalysisCopyPromiseListener(aTransferable);
+        promise->AppendNativeHandler(listener);
+      }
+    }
+  }
+  if (!handledViaPromise) {
+    FinishCopy(aTransferable);
+  }
   return NS_OK;
 }
 

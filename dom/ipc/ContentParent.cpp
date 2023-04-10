@@ -3435,7 +3435,8 @@ void ContentParent::OnVarChanged(const GfxVarUpdate& aVar) {
 }
 
 mozilla::ipc::IPCResult ContentParent::RecvSetClipboard(
-    const IPCTransferable& aTransferable, const int32_t& aWhichClipboard) {
+    const IPCTransferable& aTransferable, const int32_t& aWhichClipboard,
+    PBrowserParent* aBrowser) {
   // aRequestingPrincipal is allowed to be nullptr here.
 
   if (!ValidatePrincipal(aTransferable.requestingPrincipal(),
@@ -3458,7 +3459,11 @@ mozilla::ipc::IPCResult ContentParent::RecvSetClipboard(
       true /* aFilterUnknownFlavors */);
   NS_ENSURE_SUCCESS(rv, IPC_OK());
 
-  clipboard->SetData(trans, nullptr, aWhichClipboard);
+  BrowserParent* parent = nullptr;
+  if (aBrowser) {
+    parent = BrowserParent::GetFrom(aBrowser);
+  }
+  clipboard->SetData(trans, nullptr, aWhichClipboard, AsVariant(parent));
   return IPC_OK();
 }
 

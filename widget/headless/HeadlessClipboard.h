@@ -40,7 +40,8 @@ class HeadlessClipboard final : public ClipboardSetDataHelper {
   // Implement the native clipboard behavior.
   NS_IMETHOD SetNativeClipboardData(nsITransferable* aTransferable,
                                     nsIClipboardOwner* aOwner,
-                                    int32_t aWhichClipboard) override;
+                                    int32_t aWhichClipboard,
+                                    mozilla::dom::BrowserParent* aSource) override;
 
  private:
   UniquePtr<HeadlessClipboardData> mClipboard;

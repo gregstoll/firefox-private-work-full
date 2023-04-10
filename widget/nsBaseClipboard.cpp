@@ -8,6 +8,8 @@
 #include "nsIClipboardOwner.h"
 #include "nsError.h"
 #include "nsXPCOM.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/Document.h"
 
 using mozilla::GenericPromise;
 using mozilla::LogLevel;
@@ -29,7 +31,8 @@ ClipboardSetDataHelper::AsyncSetClipboardData::AsyncSetClipboardData(
 
 NS_IMETHODIMP
 ClipboardSetDataHelper::AsyncSetClipboardData::SetData(
-    nsITransferable* aTransferable, nsIClipboardOwner* aOwner) {
+    nsITransferable* aTransferable, nsIClipboardOwner* aOwner,
+    mozilla::dom::ClipboardDocumentSource aSource) {
   if (!IsValid()) {
     return NS_ERROR_FAILURE;
   }
@@ -41,7 +44,7 @@ ClipboardSetDataHelper::AsyncSetClipboardData::SetData(
 
   RefPtr<AsyncSetClipboardData> request =
       std::move(mClipboard->mPendingWriteRequests[mClipboardType]);
-  nsresult rv = mClipboard->SetData(aTransferable, aOwner, mClipboardType);
+  nsresult rv = mClipboard->SetData(aTransferable, aOwner, mClipboardType, aSource);
   MaybeNotifyCallback(rv);
 
   return rv;
@@ -99,7 +102,8 @@ void ClipboardSetDataHelper::RejectPendingAsyncSetDataRequestIfAny(
 NS_IMETHODIMP
 ClipboardSetDataHelper::SetData(nsITransferable* aTransferable,
                                 nsIClipboardOwner* aOwner,
-                                int32_t aWhichClipboard) {
+                                int32_t aWhichClipboard,
+                                mozilla::dom::ClipboardDocumentSource aSource) {
   NS_ENSURE_ARG(aTransferable);
   if (!nsIClipboard::IsClipboardTypeSupported(aWhichClipboard)) {
     return NS_ERROR_DOM_NOT_SUPPORTED_ERR;
@@ -108,7 +112,10 @@ ClipboardSetDataHelper::SetData(nsITransferable* aTransferable,
   // Reject existing pending asyncSetData request if any.
   RejectPendingAsyncSetDataRequestIfAny(aWhichClipboard);
 
-  return SetNativeClipboardData(aTransferable, aOwner, aWhichClipboard);
+  return SetNativeClipboardData(aTransferable, aOwner, aWhichClipboard,
+    aSource.is<mozilla::dom::BrowserParent*>()
+      ? aSource.as<mozilla::dom::BrowserParent*>()
+      : nullptr);
 }
 
 NS_IMETHODIMP ClipboardSetDataHelper::AsyncSetData(
@@ -153,9 +160,12 @@ NS_IMPL_ISUPPORTS_INHERITED0(nsBaseClipboard, ClipboardSetDataHelper)
  * Sets the transferable object
  *
  */
-NS_IMETHODIMP nsBaseClipboard::SetData(nsITransferable* aTransferable,
-                                       nsIClipboardOwner* anOwner,
-                                       int32_t aWhichClipboard) {
+NS_IMETHODIMP nsBaseClipboard::SetData(
+    nsITransferable* aTransferable, nsIClipboardOwner* anOwner,
+    int32_t aWhichClipboard,
+    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
+                     mozilla::dom::BrowserParent*>
+        aSource) {
   NS_ASSERTION(aTransferable, "clipboard given a null transferable");
 
   CLIPBOARD_LOG("%s", __FUNCTION__);
@@ -184,7 +194,8 @@ NS_IMETHODIMP nsBaseClipboard::SetData(nsITransferable* aTransferable,
   if (aTransferable) {
     mIgnoreEmptyNotification = true;
     rv = ClipboardSetDataHelper::SetData(aTransferable, anOwner,
-                                         aWhichClipboard);
+                                         aWhichClipboard,
+                                         aSource);
     mIgnoreEmptyNotification = false;
   }
   if (NS_FAILED(rv)) {

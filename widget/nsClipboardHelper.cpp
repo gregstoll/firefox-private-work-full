@@ -92,7 +92,8 @@ nsClipboardHelper::CopyStringToClipboard(const nsAString& aString,
   NS_ENSURE_SUCCESS(rv, rv);
 
   // put the transferable on the clipboard
-  rv = clipboard->SetData(trans, nullptr, aClipboardID);
+  rv = clipboard->SetData(trans, nullptr, aClipboardID,
+                          /* TODO probably*/ AsVariant(mozilla::Nothing()));
   NS_ENSURE_SUCCESS(rv, rv);
 
   return NS_OK;

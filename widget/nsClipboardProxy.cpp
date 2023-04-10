@@ -11,6 +11,8 @@
 #include "mozilla/dom/ContentChild.h"
 #include "mozilla/net/CookieJarSettings.h"
 #include "mozilla/Maybe.h"
+#include "mozilla/dom/BrowserChild.h"
+#include "mozilla/dom/Document.h"
 #include "mozilla/Unused.h"
 #include "nsArrayUtils.h"
 #include "nsISupportsPrimitives.h"
@@ -29,7 +31,8 @@ nsClipboardProxy::nsClipboardProxy() : mClipboardCaps(false, false, false) {}
 
 NS_IMETHODIMP
 nsClipboardProxy::SetData(nsITransferable* aTransferable,
-                          nsIClipboardOwner* anOwner, int32_t aWhichClipboard) {
+                          nsIClipboardOwner* anOwner, int32_t aWhichClipboard,
+                          Variant<Nothing, Document*, BrowserParent*> aSource) {
 #if defined(ACCESSIBILITY) && defined(XP_WIN)
   a11y::Compatibility::SuppressA11yForClipboardCopy();
 #endif
@@ -38,7 +41,12 @@ nsClipboardProxy::SetData(nsITransferable* aTransferable,
   IPCTransferable ipcTransferable;
   nsContentUtils::TransferableToIPCTransferable(aTransferable, &ipcTransferable,
                                                 false, nullptr);
-  child->SendSetClipboard(std::move(ipcTransferable), aWhichClipboard);
+  BrowserChild* browserChild = nullptr;
+  if (aSource.is<Document*>()) {
+    browserChild =
+        BrowserChild::GetFrom(aSource.as<Document*>()->GetDocShell());
+  }
+  child->SendSetClipboard(std::move(ipcTransferable), aWhichClipboard, browserChild);
   return NS_OK;
 }
 
