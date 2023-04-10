@@ -12,11 +12,21 @@
 %{C++
 #include "mozilla/MozPromise.h"
 
+namespace mozilla {
+    template <typename... Ts> class Variant;
+namespace dom {
+    class BrowserParent;
+    class Document;
+    using ClipboardDocumentSource = Variant<Nothing, Document*, BrowserParent*>;
+}
+}
+
 using DataFlavorsPromise = mozilla::MozPromise<nsTArray<nsCString>, nsresult, true>;
 %}
 
 interface nsIArray;
 
+native ClipboardDocumentSourceType(mozilla::dom::ClipboardDocumentSource);
 native AsyncGetDataPromise(RefPtr<mozilla::GenericPromise>);
 native AsyncDataFlavorsPromise(RefPtr<DataFlavorsPromise>);
 
@@ -35,11 +45,15 @@ interface nsIClipboard : nsISupports
     * @param  aTransferable The transferable
     * @param  anOwner The owner of the transferable
     * @param  aWhichClipboard Specifies the clipboard to which this operation applies.
-    * @result NS_Ok if no errors
+    * @param  aSource The source where the data is coming from (if any)
+    *                 Nothing if this should not be subject to content analysis
+    *                 Document if in the same process as the content
+    *                 BrowserParent if in the browser process
+    * @result NS_OK if no errors
     */
 
     void setData ( in nsITransferable aTransferable, in nsIClipboardOwner anOwner,
-                    in long aWhichClipboard ) ;
+                    in long aWhichClipboard, in ClipboardDocumentSourceType aSource) ;
 
    /**
     * Filters the flavors aTransferable can import (see

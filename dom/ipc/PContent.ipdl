@@ -1218,7 +1218,8 @@ parent:
                        nullable nsIPrincipal aRequestingPrincipal,
                        nsContentPolicyType aContentPolicyType,
                        nullable nsIReferrerInfo aReferrerInfo,
-                       int32_t aWhichClipboard);
+                       int32_t aWhichClipboard,
+                       nullable PBrowser aBrowser);
 
     // Given a list of supported types, returns the clipboard data for the
     // first type that matches.

@@ -29,9 +29,12 @@ NS_IMPL_ISUPPORTS(nsBaseClipboard, nsIClipboard)
  * Sets the transferable object
  *
  */
-NS_IMETHODIMP nsBaseClipboard::SetData(nsITransferable* aTransferable,
-                                       nsIClipboardOwner* anOwner,
-                                       int32_t aWhichClipboard) {
+NS_IMETHODIMP nsBaseClipboard::SetData(
+    nsITransferable* aTransferable, nsIClipboardOwner* anOwner,
+    int32_t aWhichClipboard,
+    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
+                     mozilla::dom::BrowserParent*>
+        aSource) {
   NS_ASSERTION(aTransferable, "clipboard given a null transferable");
 
   CLIPBOARD_LOG("%s", __FUNCTION__);
@@ -59,7 +62,11 @@ NS_IMETHODIMP nsBaseClipboard::SetData(nsITransferable* aTransferable,
   nsresult rv = NS_ERROR_FAILURE;
   if (mTransferable) {
     mIgnoreEmptyNotification = true;
-    rv = SetNativeClipboardData(aWhichClipboard);
+    rv = SetNativeClipboardData(aWhichClipboard,
+                                aSource.is<mozilla::dom::BrowserParent*>()
+                                    ? aSource.as<mozilla::dom::BrowserParent*>()
+                                    : nullptr);
+    ;
     mIgnoreEmptyNotification = false;
   }
   if (NS_FAILED(rv)) {

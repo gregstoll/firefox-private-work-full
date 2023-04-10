@@ -998,7 +998,8 @@ class ContentParent final : public PContentParent,
       const IPCDataTransfer& aDataTransfer, const bool& aIsPrivateData,
       nsIPrincipal* aRequestingPrincipal,
       const nsContentPolicyType& aContentPolicyType,
-      nsIReferrerInfo* aReferrerInfo, const int32_t& aWhichClipboard);
+      nsIReferrerInfo* aReferrerInfo, const int32_t& aWhichClipboard,
+      PBrowserParent* aBrowser);
 
   mozilla::ipc::IPCResult RecvGetClipboard(nsTArray<nsCString>&& aTypes,
                                            const int32_t& aWhichClipboard,

@@ -20,6 +20,11 @@ static mozilla::LazyLogModule sWidgetClipboardLog("WidgetClipboard");
 class nsITransferable;
 class nsIClipboardOwner;
 class nsIWidget;
+namespace mozilla {
+namespace dom {
+class BrowserParent;
+}
+}  // namespace mozilla
 
 /**
  * Native Win32 BaseClipboard wrapper
@@ -38,7 +43,8 @@ class nsBaseClipboard : public nsIClipboard {
  protected:
   virtual ~nsBaseClipboard();
 
-  NS_IMETHOD SetNativeClipboardData(int32_t aWhichClipboard) = 0;
+  NS_IMETHOD SetNativeClipboardData(int32_t aWhichClipboard,
+                                    mozilla::dom::BrowserParent* aBrowser) = 0;
   NS_IMETHOD GetNativeClipboardData(nsITransferable* aTransferable,
                                     int32_t aWhichClipboard) = 0;
 

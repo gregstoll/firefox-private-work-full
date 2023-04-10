@@ -17,9 +17,11 @@ HeadlessClipboard::HeadlessClipboard()
     : mClipboard(MakeUnique<HeadlessClipboardData>()) {}
 
 NS_IMETHODIMP
-HeadlessClipboard::SetData(nsITransferable* aTransferable,
-                           nsIClipboardOwner* anOwner,
-                           int32_t aWhichClipboard) {
+HeadlessClipboard::SetData(
+    nsITransferable* aTransferable, nsIClipboardOwner* anOwner,
+    int32_t aWhichClipboard,
+    Variant<Nothing, mozilla::dom::Document*, mozilla::dom::BrowserParent*>
+        aSource) {
   if (aWhichClipboard != kGlobalClipboard) {
     return NS_ERROR_NOT_IMPLEMENTED;
   }
@@ -39,6 +41,7 @@ HeadlessClipboard::SetData(nsITransferable* aTransferable,
   }
   nsAutoString utf16string;
   wideString->GetData(utf16string);
+  // TODO - need to do DLP here?
   mClipboard->SetText(utf16string);
 
   return NS_OK;

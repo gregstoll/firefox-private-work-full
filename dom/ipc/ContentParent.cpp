@@ -3472,7 +3472,8 @@ mozilla::ipc::IPCResult ContentParent::RecvSetClipboard(
     const IPCDataTransfer& aDataTransfer, const bool& aIsPrivateData,
     nsIPrincipal* aRequestingPrincipal,
     const nsContentPolicyType& aContentPolicyType,
-    nsIReferrerInfo* aReferrerInfo, const int32_t& aWhichClipboard) {
+    nsIReferrerInfo* aReferrerInfo, const int32_t& aWhichClipboard,
+    PBrowserParent* aBrowser) {
   // aRequestingPrincipal is allowed to be nullptr here.
 
   if (!ValidatePrincipal(aRequestingPrincipal,
@@ -3495,7 +3496,11 @@ mozilla::ipc::IPCResult ContentParent::RecvSetClipboard(
       true /* aAddDataFlavor */, trans, true /* aFilterUnknownFlavors */);
   NS_ENSURE_SUCCESS(rv, IPC_OK());
 
-  clipboard->SetData(trans, nullptr, aWhichClipboard);
+  BrowserParent* parent = nullptr;
+  if (aBrowser) {
+    parent = BrowserParent::GetFrom(aBrowser);
+  }
+  clipboard->SetData(trans, nullptr, aWhichClipboard, AsVariant(parent));
   return IPC_OK();
 }
 
