@@ -38,6 +38,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  DownloadError: "resource://gre/modules/DownloadCore.sys.mjs",
 });
 
 XPCOMUtils.defineLazyServiceGetters(lazy, {
@@ -146,6 +147,7 @@ export var DownloadsCommon = {
   DOWNLOAD_BLOCKED_PARENTAL: 6,
   DOWNLOAD_DIRTY: 8,
   DOWNLOAD_BLOCKED_POLICY: 9,
+  DOWNLOAD_BLOCKED_CONTENT_ANALYSIS: 10,
 
   // The following are the possible values of the "attention" property.
   ATTENTION_NONE: "",
@@ -298,8 +300,16 @@ export var DownloadsCommon = {
       if (download.error.becauseBlockedByReputationCheck) {
         return DownloadsCommon.DOWNLOAD_DIRTY;
       }
+      if (download.error.becauseBlockedByContentAnalysis) {
+        let ret =
+          download.error.reputationCheckVerdict === lazy.DownloadError.BLOCK_VERDICT_MALWARE ?
+            DownloadsCommon.DOWNLOAD_BLOCKED_CONTENT_ANALYSIS :
+            DownloadsCommon.DOWNLOAD_DIRTY;
+        return ret;
+      }
       return DownloadsCommon.DOWNLOAD_FAILED;
     }
+
     if (download.canceled) {
       if (download.hasPartialData) {
         return DownloadsCommon.DOWNLOAD_PAUSED;
@@ -316,7 +326,8 @@ export var DownloadsCommon = {
     // Check hasBlockedData to avoid double counting if you click the X button
     // in the Libarary view and then delete the download from the history.
     if (
-      download.error?.becauseBlockedByReputationCheck &&
+      (download.error?.becauseBlockedByReputationCheck ||
+       download.error?.becauseBlockedByContentAnalysis) &&
       download.hasBlockedData
     ) {
       Services.telemetry
@@ -863,7 +874,8 @@ DownloadsDataCtor.prototype = {
       download,
       DownloadsCommon.stateOfDownload(download)
     );
-    if (download.error?.becauseBlockedByReputationCheck) {
+    if (download.error?.becauseBlockedByReputationCheck ||
+        download.error?.becauseBlockedByContentAnalysis) {
       this._notifyDownloadEvent("error");
     }
   },

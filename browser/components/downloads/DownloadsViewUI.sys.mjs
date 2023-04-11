@@ -18,6 +18,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   DownloadsCommon: "resource:///modules/DownloadsCommon.sys.mjs",
   FileUtils: "resource://gre/modules/FileUtils.sys.mjs",
   UrlbarUtils: "resource:///modules/UrlbarUtils.sys.mjs",
+  DownloadError: "resource://gre/modules/DownloadCore.sys.mjs",
 });
 
 XPCOMUtils.defineLazyServiceGetter(
@@ -769,7 +770,8 @@ DownloadsViewUI.DownloadElementShell.prototype = {
             lazy.DownloadsCommon.strings.stateBlockedParentalControls
           );
           this.hideButton();
-        } else if (this.download.error.becauseBlockedByReputationCheck) {
+        } else if (this.download.error.becauseBlockedByReputationCheck ||
+                   this.download.error.becauseBlockedByContentAnalysis) {
           verdict = this.download.error.reputationCheckVerdict;
           let hover = "";
           if (!this.download.hasBlockedData) {
@@ -878,10 +880,11 @@ DownloadsViewUI.DownloadElementShell.prototype = {
     let s = lazy.DownloadsCommon.strings;
     if (
       !this.download.error ||
-      !this.download.error.becauseBlockedByReputationCheck
-    ) {
+      (!this.download.error.becauseBlockedByReputationCheck &&
+        !this.download.error.becauseBlockedByContentAnalysis)) {
       return [null, null];
     }
+
     switch (this.download.error.reputationCheckVerdict) {
       case lazy.Downloads.Error.BLOCK_VERDICT_UNCOMMON:
         return [s.blockedUncommon2, [s.unblockTypeUncommon2, s.unblockTip2]];
@@ -891,13 +894,23 @@ DownloadsViewUI.DownloadElementShell.prototype = {
           [s.unblockInsecure2, s.unblockTip2],
         ];
       case lazy.Downloads.Error.BLOCK_VERDICT_POTENTIALLY_UNWANTED:
-        return [
-          s.blockedPotentiallyUnwanted,
-          [s.unblockTypePotentiallyUnwanted2, s.unblockTip2],
-        ];
+        if (this.download.error.becauseBlockedByReputationCheck) {
+          return [
+            s.blockedPotentiallyUnwanted,
+            [s.unblockTypePotentiallyUnwanted2, s.unblockTip2],
+          ];
+        } else {
+          return [
+            s.warnedByContentAnalysis,
+            [s.unblockWarningTip1, s.unblockWarningTip2],
+          ];
+        }
       case lazy.Downloads.Error.BLOCK_VERDICT_MALWARE:
-        return [s.blockedMalware, [s.unblockTypeMalware, s.unblockTip2]];
-
+        if (this.download.error.becauseBlockedByReputationCheck) {
+          return [s.blockedMalware, [s.unblockTypeMalware, s.unblockTip2]];
+        } else {
+          return [s.blockedByContentAnalysis, [s.unblockContentAnalysis1, s.unblockContentAnalysis2]];
+        }
       case lazy.Downloads.Error.BLOCK_VERDICT_DOWNLOAD_SPAM:
         let title = {
           id: "downloads-files-not-downloaded",
@@ -911,6 +924,7 @@ DownloadsViewUI.DownloadElementShell.prototype = {
         };
         return [{ l10n: title }, [{ l10n: details }, null]];
     }
+
     throw new Error(
       "Unexpected reputationCheckVerdict: " +
         this.download.error.reputationCheckVerdict
@@ -987,6 +1001,7 @@ DownloadsViewUI.DownloadElementShell.prototype = {
         return "downloadsCmd_open";
       case lazy.DownloadsCommon.DOWNLOAD_BLOCKED_PARENTAL:
         return "downloadsCmd_openReferrer";
+      case lazy.DownloadsCommon.DOWNLOAD_BLOCKED_CONTENT_ANALYSIS:
       case lazy.DownloadsCommon.DOWNLOAD_DIRTY:
         return "downloadsCmd_showBlockedInfo";
     }
@@ -1017,7 +1032,10 @@ DownloadsViewUI.DownloadElementShell.prototype = {
       case "downloadsCmd_unblock":
       case "downloadsCmd_unblockAndSave":
       case "downloadsCmd_unblockAndOpen":
-        return this.download.hasBlockedData;
+        // If content analysis blocked the file then unblocking is not permitted.
+        return this.download.hasBlockedData &&
+          (!this.download.error.becauseBlockedByContentAnalysis ||
+            this.download.error.reputationCheckVerdict !== lazy.DownloadError.BLOCK_VERDICT_MALWARE);
       case "downloadsCmd_cancel":
         return this.download.hasPartialData || !this.download.stopped;
       case "downloadsCmd_open":
