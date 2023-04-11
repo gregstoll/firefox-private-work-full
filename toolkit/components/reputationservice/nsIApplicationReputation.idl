@@ -20,12 +20,13 @@ interface nsIReferrerInfo;
 interface nsIApplicationReputationService : nsISupports {
   /**
    * Indicates the reason for the application reputation block.
+   * This list should be sorted from least-to-most restrictive verdict.
    */
   const unsigned long VERDICT_SAFE = 0;
-  const unsigned long VERDICT_DANGEROUS = 1;
+  const unsigned long VERDICT_POTENTIALLY_UNWANTED = 1;
   const unsigned long VERDICT_UNCOMMON = 2;
-  const unsigned long VERDICT_POTENTIALLY_UNWANTED = 3;
-  const unsigned long VERDICT_DANGEROUS_HOST = 4;
+  const unsigned long VERDICT_DANGEROUS_HOST = 3;
+  const unsigned long VERDICT_DANGEROUS = 4;
 
   /**
    * Start querying the application reputation service.

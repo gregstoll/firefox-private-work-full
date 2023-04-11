@@ -123,7 +123,8 @@ export let DownloadHistory = {
     } else if (download.error) {
       if (download.error.becauseBlockedByParentalControls) {
         state = METADATA_STATE_BLOCKED_PARENTAL;
-      } else if (download.error.becauseBlockedByReputationCheck) {
+      } else if (download.error.becauseBlockedByReputationCheck ||
+                 download.error.becauseBlockedByContentAnalysis) {
         state = METADATA_STATE_DIRTY;
       } else {
         state = METADATA_STATE_FAILED;
