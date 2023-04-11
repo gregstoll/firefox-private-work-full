@@ -27,11 +27,13 @@ var ContentAnalysisViews = {
 
   _SHOW_DIALOGS: false,
 
-  _SLOW_DLP_NOTIFICATION_TIMEOUT_MS: 30 * 1000,    // 30 sec
+  _SLOW_DLP_NOTIFICATION_TIMEOUT_MS: 5 * 1000,    // 5 sec
 
   _RESULT_NOTIFICATION_TIMEOUT_MS: 5 * 60 * 1000,    // 5 min
 
   _RESULT_NOTIFICATION_FAST_TIMEOUT_MS: 60 * 1000,    // 1 min
+
+  _CA_SILENCE_NOTIFICATIONS: "browser.contentanalysis.silent_notifications",
 
   /**
    * Registers for various messages/events that will indicate the potential
@@ -50,7 +52,7 @@ var ContentAnalysisViews = {
   },
 
   /**
-   * Register for file download CA events.
+   * Register UI for file download CA events.
    */
   async initializeDownloadCA() {
     let downloadsView = {
@@ -68,11 +70,9 @@ var ContentAnalysisViews = {
       observe: async (aSubj, aTopic, aData) => {
         switch (aTopic) {
           case 'quit-application-requested':
-            // console.log(`observe ${aTopic}`);
             let allDownloads = await (await Downloads.getList(Downloads.ALL)).getAll();
             for (var download of allDownloads) {
-              // console.log(`disconnecting ${download} has resultViewNotification as ${download.contentAnalysis.resultView.notification}`);
-              this._clearDownloadViews(download);
+              downloadsView._clearDownloadViews(download);
             }
             Services.obs.removeObserver(downloadsView, 'quit-application-requested');
         }
@@ -87,11 +87,9 @@ var ContentAnalysisViews = {
           return;
         }
 
-        const SLOW_TIMEOUT_MS = 3000;  // 3 sec
-
         // On contentAnalysis.RUNNING, start timer that, when it expires,
         // presents a "slow CA check" message.
-        if (aDownload.contentAnalysis.state == aDownload.contentAnalysis.RUNNING &&
+        if (aDownload.contentAnalysis.state === aDownload.contentAnalysis.RUNNING &&
             !aDownload.contentAnalysis.hasOwnProperty('busyView')) {
           aDownload.contentAnalysis.busyView = {
             timer: setTimeout(() => {
@@ -100,14 +98,14 @@ var ContentAnalysisViews = {
                   Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
                   aDownload.source.url),
               };
-            }, SLOW_TIMEOUT_MS),
+            }, this._SLOW_DLP_NOTIFICATION_TIMEOUT_MS),
           };
           return;
         }
 
         // On ContentAnalysis.FINISHED, cancels timer or slow message UI,
         // if present, and possibly presents the CA verdict.
-        if (aDownload.contentAnalysis.state == aDownload.contentAnalysis.FINISHED &&
+        if (aDownload.contentAnalysis.state === aDownload.contentAnalysis.FINISHED &&
             !aDownload.contentAnalysis.hasOwnProperty('resultView')) {
           this._disconnectFromView(aDownload.contentAnalysis.busyView);
           aDownload.contentAnalysis.resultView = {
@@ -124,7 +122,21 @@ var ContentAnalysisViews = {
           return;
         }
 
-        this._clearDownloadViews(aDownload);
+        downloadsView._clearDownloadViews(aDownload);
+      },
+
+      _clearDownloadViews(aDownload) {
+        // Cancels "slow operation" timer for the download, or any
+        // result notifications, if they exist.
+        if ('busyView' in aDownload.contentAnalysis) {
+          this._disconnectFromView(aDownload.contentAnalysis.busyView);
+          delete aDownload.contentAnalysis.busyView;
+        }
+
+        if ('resultView' in aDownload.contentAnalysis) {
+          this._disconnectFromView(aDownload.contentAnalysis.resultView);
+          delete aDownload.contentAnalysis.resultView;
+        }
       },
     };
 
@@ -132,27 +144,13 @@ var ContentAnalysisViews = {
     await (await Downloads.getList(Downloads.ALL)).addView(downloadsView);
   },
 
-  _clearDownloadViews(aDownload) {
-    if ('contentAnalysis.busyView' in aDownload) {
-      this._disconnectFromView(aDownload.contentAnalysis.busyView);
-    }
-
-    if ('contentAnalysis.resultView' in aDownload) {
-      this._disconnectFromView(aDownload.contentAnalysis.resultView);
-    }
-  },
-
   _disconnectFromView(caView) {
-    // Cancels "slow operation" timer for the download, or any
-    // notifications for it, if it exists.
     if (!caView) {
       return;
     }
     if ('timer' in caView) {
-      // console.log('removing TIMER');
       clearTimeout(caView.timer);
     } else if ('notification' in caView) {
-      // console.log('removing NOTIFICATION');
       caView.notification.close();
     }
   },
@@ -165,6 +163,7 @@ var ContentAnalysisViews = {
     if (this._SHOW_NOTIFICATIONS) {
       const notification = new Notification('Content Analysis', {
         body: aMessage,
+        silent: Services.prefs.getBoolPref(_CA_SILENCE_NOTIFICATIONS),
       });
 
 //      notification.addEventListener('click', () => { notification.close(); });
