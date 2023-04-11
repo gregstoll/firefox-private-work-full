@@ -2578,167 +2578,6 @@ DownloadCopySaver.prototype = {
   },
 
   /**
-   * Start the content analysis check (if a CA agent is connected).
-   * @return {Promise}
-   * @resolves When content analysis is complete and has been approved.
-   * @rejects Throws DownloadError on error.
-   */
-  _checkContentAnalysis() {
-    if (!lazy.gContentAnalysis.isActive) {
-      return Promise.resolve({
-        blockException: null,
-        verdict: nsIApplicationReputationService.VERDICT_SAFE
-      });
-    }
-
-    let resources = [{
-      url: this.source.url,
-      type: Ci.nsIClientDownloadResource.DOWNLOAD_URL,
-    }];
-
-    let redirects = this.saver.getRedirects();
-    if (redirects) {
-      for (redirect of redirects) {
-        resources.push({
-          url: redirect.uri,
-          type: Ci.nsIClientDownloadResource.DOWNLOAD_REDIRECT,
-        });
-      }
-    }
-
-    // source.referrerInfo is a string or nsIReferrerInfo that
-    // represents the download referrer.  May be null.
-    if (this.source.referrerInfo) {
-      resources.push({
-        url: isString(this.source.referrerInfo) ?
-                this.source.referrerInfo :
-                this.source.referrerInfo.originalReferrer.spec,
-        type: Ci.nsIClientDownloadResource.TAB_URL,
-      });
-    }
-
-    try {
-      return
-        lazy.gContentAnalysis.AnalyzeContentRequest({
-          analysisType: Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
-          resources: resources,
-          url: this.source.url,
-          filePath: this.target.path,
-          sha256Digest: this.download.saver.getSha256Hash(),
-        }).then(
-          (response) => {
-            let finalAction;
-            let permissionVerdict;
-            let exception = null;
-            switch (response.action) {
-              case Ci.nsIContentAnalysisResponse.ALLOW:
-                finalAction = Ci.nsIContentAnalysisAcknowledgement.ALLOW;
-                permissionVerdict = nsIApplicationReputationService.VERDICT_SAFE;
-                break;
-              case Ci.nsIContentAnalysisResponse.REPORT_ONLY:
-                // TODO: UI
-                console.info(`Report from content analysis for ${this.source.url}`);
-                finalAction = Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY;
-                permissionVerdict = nsIApplicationReputationService.VERDICT_SAFE;
-                break;
-              case Ci.nsIContentAnalysisResponse.WARN:
-                // TODO: UI
-                console.warn(`Warning from content analysis for ${this.source.url}`);
-                finalAction = Ci.nsIContentAnalysisAcknowledgement.WARN;
-                permissionVerdict = nsIApplicationReputationService.VERDICT_POTENTIALLY_UNWANTED;
-                break;
-              case Ci.nsIContentAnalysisResponse.BLOCK:
-                permissionVerdict = nsIApplicationReputationService.VERDICT_DANGEROUS;
-                exception = new DownloadError({ becauseBlockedByContentAnalysis: true });
-                finalAction = Ci.nsIContentAnalysisAcknowledgement.BLOCK;
-                break;
-              default:
-                // Internal error.  Block download and do not send acknowledge.
-                return {
-                  blockException: new DownloadError({ becauseContentAnalysisFailure: true }),
-                  verdict: nsIApplicationReputationService.VERDICT_DANGEROUS
-                };
-            }
-
-            try {
-              response.Acknowledge({
-                result: Ci.nsIContentAnalysisAcknowledgement.SUCCESS,
-                finalAction: finalAction,
-              });
-            } catch (ex) {
-              // The acknowledge response failed.  Ignore this.
-            }
-
-            return {
-              verdict: permissionVerdict,
-              blockException: exception,
-            }
-          },
-          (failure) => {
-            return {
-              blockException: new DownloadError({ becauseContentAnalysisFailure: true }),
-              verdict: nsIApplicationReputationService.VERDICT_DANGEROUS,
-            };
-          });
-    } catch (ex) {
-      // Failure in the CA must block the operation.
-      return Promise.resolve({
-        blockException: new DownloadError({ becauseContentAnalysisFailure: true }),
-        verdict: nsIApplicationReputationService.VERDICT_DANGEROUS,
-      });
-    }
-  },
-
-  /**
-   * Start the reputation check
-   * @return {Promise}
-   * @resolves When reputation check is complete
-   * @rejects Throws DownloadError on error.
-   */
-  _checkReputation(download) {
-    // Start an asynchronous reputation check.
-    try {
-      return
-        lazy.DownloadIntegration.shouldBlockForReputationCheck(download).then(
-          (result) => {
-            let blockException = null;
-            if (result.shouldBlock) {
-              blockException = new DownloadError({
-                becauseBlockedByReputationCheck: true,
-                reputationCheckVerdict: result.verdict,
-              });
-            }
-            return {
-              blockException: blockException,
-              verdict: result.verdict,
-            };
-          },
-          (failure) => {
-            return {
-              blockException: new DownloadError({
-                becauseBlockedByReputationCheck: true,
-                reputationCheckVerdict: nsIApplicationReputationService.VERDICT_DANGEROUS,
-              }),
-              verdict: nsIApplicationReputationService.VERDICT_DANGEROUS,
-            };
-          });
-    } catch (ex) {
-      return Promise.resolve({
-        blockException: new DownloadError({
-          becauseBlockedByReputationCheck: true,
-          reputationCheckVerdict: nsIApplicationReputationService.VERDICT_DANGEROUS,
-        }),
-        verdict: nsIApplicationReputationService.VERDICT_DANGEROUS,
-      });
-    }
-  },
-
-  // Verdicts are sorted from least-to-most restrictive.
-  mostRestrictive(verdict1, verdict2) {
-    return Math.max(verdict1, verdict2);
-  },
-
-  /**
    * Perform the reputation check and cleanup the downloaded data if required.
    * If the download passes the reputation check and is using a part file we
    * will move it to the target path since reputation checking is the final
@@ -2752,36 +2591,163 @@ DownloadCopySaver.prototype = {
    * @rejects DownloadError if the download should be blocked.
    */
   async _checkReputationAndMove(aSetPropertiesFn) {
+    let checkContentAnalysis = (download) => {
+      if (!lazy.gContentAnalysis.isActive) {
+        return Promise.resolve({
+          verdict: Ci.nsIApplicationReputationService.VERDICT_SAFE
+        });
+      }
+
+      let resources = [{
+        url: download.source.url,
+        type: Ci.nsIClientDownloadResource.DOWNLOAD_URL,
+      }];
+
+      let redirects = download.saver.getRedirects();
+      if (redirects) {
+        for (redirect of redirects) {
+          resources.push({
+            url: redirect.uri,
+            type: Ci.nsIClientDownloadResource.DOWNLOAD_REDIRECT,
+          });
+        }
+      }
+
+      // source.referrerInfo is a string or nsIReferrerInfo that
+      // represents the download referrer.  May be null.
+      if (download.source.referrerInfo) {
+        resources.push({
+          url: isString(download.source.referrerInfo) ?
+                  download.source.referrerInfo :
+                  download.source.referrerInfo.originalReferrer.spec,
+          type: Ci.nsIClientDownloadResource.TAB_URL,
+        });
+      }
+
+      let ret = null;
+      try {
+        ret =
+          lazy.gContentAnalysis.AnalyzeContentRequest({
+            analysisType: Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
+            resources: resources,
+            url: download.source.url,
+            filePath: download.target.path,
+            sha256Digest: download.saver.getSha256Hash(),
+          }).then(
+            (response) => {
+              let finalAction;
+              let permissionVerdict;
+              let exception = null;
+              switch (response.action) {
+                case Ci.nsIContentAnalysisResponse.ALLOW:
+                  finalAction = Ci.nsIContentAnalysisAcknowledgement.ALLOW;
+                  permissionVerdict = Ci.nsIApplicationReputationService.VERDICT_SAFE;
+                  break;
+                case Ci.nsIContentAnalysisResponse.REPORT_ONLY:
+                  // TODO: UI
+                  console.info(`Report from content analysis for ${download.source.url}`);
+                  finalAction = Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY;
+                  permissionVerdict = Ci.nsIApplicationReputationService.VERDICT_SAFE;
+                  break;
+                case Ci.nsIContentAnalysisResponse.WARN:
+                  // TODO: UI
+                  console.warn(`Warning from content analysis for ${download.source.url}`);
+                  finalAction = Ci.nsIContentAnalysisAcknowledgement.WARN;
+                  permissionVerdict = Ci.nsIApplicationReputationService.VERDICT_POTENTIALLY_UNWANTED;
+                  break;
+                case Ci.nsIContentAnalysisResponse.BLOCK:
+                  permissionVerdict = Ci.nsIApplicationReputationService.VERDICT_DANGEROUS;
+                  exception = new DownloadError({ becauseBlockedByContentAnalysis: true });
+                  finalAction = Ci.nsIContentAnalysisAcknowledgement.BLOCK;
+                  break;
+                default:
+                  // Internal error.  Block download and do not send acknowledge.
+                  throw new DownloadError({ becauseContentAnalysisFailure: true });
+              }
+
+              try {
+                response.Acknowledge({
+                  result: Ci.nsIContentAnalysisAcknowledgement.SUCCESS,
+                  finalAction: finalAction,
+                });
+              } catch (ex) {
+                // The acknowledge response failed.  Ignore this.
+              }
+
+              if (exception) {
+                throw exception;
+              }
+
+              return {
+                verdict: permissionVerdict,
+              }
+            },
+            (failure) => {
+                throw new DownloadError({ becauseContentAnalysisFailure: true });
+            });
+      } catch (ex) {
+        // Failure in the CA must block the operation.
+        throw new DownloadError({ becauseContentAnalysisFailure: true });
+      }
+
+      return ret;
+    };
+
+    let checkReputation = (download) => {
+      // Start an asynchronous reputation check.
+      let ret = null;
+      try {
+        ret =
+          lazy.DownloadIntegration.shouldBlockForReputationCheck(download).then(
+            (result) => {
+              if (result.shouldBlock) {
+                throw new DownloadError({
+                  becauseBlockedByReputationCheck: true,
+                  reputationCheckVerdict: result.verdict,
+                });
+              }
+              return {
+                verdict: result.verdict,
+              };
+            },
+            (failure) => {
+              throw new DownloadError({
+                becauseBlockedByReputationCheck: true,
+                reputationCheckVerdict: Ci.nsIApplicationReputationService.VERDICT_DANGEROUS,
+              });
+            });
+      } catch (ex) {
+        throw new DownloadError({
+          becauseBlockedByReputationCheck: true,
+          reputationCheckVerdict: Ci.nsIApplicationReputationService.VERDICT_DANGEROUS,
+        });
+      }
+
+      return ret;
+    };
+
+    let mostRestrictive = (verdict1, verdict2) => {
+      // Verdicts are sorted from least-to-most restrictive.
+      return Math.max(verdict1, verdict2);
+    };
+
     let download = this.download;
     let targetPath = this.download.target.path;
     let partFilePath = this.download.target.partFilePath;
 
-    let reputationPromise = _checkReputation(download);
-    let caPromise = _checkContentAnalysis();
+    let permissionResult = { verdict: null };
+    try {
+      let reputationPromise = checkReputation(download);
+      let caPromise = checkContentAnalysis(download);
 
-    let permissionResult =
-      await Promise.any([reputationPromise, caPromise]).then(
-        (result1) => {
-          // If this result says to block then we don't have to wait for the other one.
-          if (result1.blockException) {
-            return result1;
-          }
-
-          await Promise.all([reputationPromise, caPromise]).then(
-              (results) => {
-                // result1 didn't have an exception so only one result could.
-                let blockException =
-                  results[0].blockException ?
-                    results[0].blockException : results[1].blockException;
-
-                return {
-                  blockException: blockException,
-                  verdict: mostRestrictive(results[0].verdict, results[1].verdict),
-                };
-              });
-        });
-
-    if (permissionResult.blockException) {
+      permissionResult =
+        await Promise.all([reputationPromise, caPromise]).then(
+          (results) => {
+            return {
+              verdict: mostRestrictive(results[0].verdict, results[1].verdict),
+            };
+          });
+    } catch(ex) {
       Services.telemetry
         .getKeyedHistogramById("DOWNLOADS_USER_ACTION_ON_BLOCKED_DOWNLOAD")
         .add(verdict, 0);
@@ -2800,7 +2766,7 @@ DownloadCopySaver.prototype = {
 
       aSetPropertiesFn(newProperties);
 
-      throw permissionResult.blockException;
+      throw ex;
     }
 
     if (partFilePath) {
