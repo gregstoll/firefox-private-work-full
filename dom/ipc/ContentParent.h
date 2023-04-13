@@ -1021,7 +1021,7 @@ class ContentParent final : public PContentParent,
 
   mozilla::ipc::IPCResult RecvGetClipboardAsync(
       nsTArray<nsCString>&& aTypes, const int32_t& aWhichClipboard,
-      GetClipboardAsyncResolver&& aResolver);
+      PBrowserParent* aBrowser, GetClipboardAsyncResolver&& aResolver);
 
   mozilla::ipc::IPCResult RecvPlaySound(nsIURI* aURI);
   mozilla::ipc::IPCResult RecvBeep();

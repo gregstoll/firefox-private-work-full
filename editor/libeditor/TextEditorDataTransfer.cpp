@@ -163,23 +163,27 @@ nsresult TextEditor::InsertDroppedDataTransferAsAction(
 nsresult TextEditor::PasteAsAction(int32_t aClipboardType,
                                    bool aDispatchPasteEvent,
                                    nsIPrincipal* aPrincipal) {
-  AutoEditActionDataSetter editActionData(*this, EditAction::ePaste,
-                                          aPrincipal);
-  if (NS_WARN_IF(!editActionData.CanHandle())) {
+  // TODO this is pretty gross
+  AutoEditActionDataSetter* editActionData =
+      new AutoEditActionDataSetter(*this, EditAction::ePaste, aPrincipal);
+  if (NS_WARN_IF(!editActionData->CanHandle())) {
+    delete editActionData;
     return NS_ERROR_NOT_INITIALIZED;
   }
 
   if (aDispatchPasteEvent) {
     if (!FireClipboardEvent(ePaste, aClipboardType)) {
+      delete editActionData;
       return EditorBase::ToGenericNSResult(NS_ERROR_EDITOR_ACTION_CANCELED);
     }
   } else {
     // The caller must already have dispatched a "paste" event.
-    editActionData.NotifyOfDispatchingClipboardEvent();
+    editActionData->NotifyOfDispatchingClipboardEvent();
   }
 
   if (!GetDocument()) {
     NS_WARNING("The editor didn't have document, but ignored");
+    delete editActionData;
     return NS_OK;
   }
 
@@ -192,6 +196,7 @@ nsresult TextEditor::PasteAsAction(int32_t aClipboardType,
       do_GetService("@mozilla.org/widget/clipboard;1", &rv);
   if (NS_FAILED(rv)) {
     NS_WARNING("Failed to get nsIClipboard service");
+    delete editActionData;
     return rv;
   }
 
@@ -200,6 +205,7 @@ nsresult TextEditor::PasteAsAction(int32_t aClipboardType,
       EditorUtils::CreateTransferableForPlainText(*GetDocument());
   if (maybeTransferable.isErr()) {
     NS_WARNING("EditorUtils::CreateTransferableForPlainText() failed");
+    delete editActionData;
     return EditorBase::ToGenericNSResult(maybeTransferable.unwrapErr());
   }
   nsCOMPtr<nsITransferable> transferable(maybeTransferable.unwrap());
@@ -207,22 +213,38 @@ nsresult TextEditor::PasteAsAction(int32_t aClipboardType,
     NS_WARNING(
         "EditorUtils::CreateTransferableForPlainText() returned nullptr, but "
         "ignored");
+    delete editActionData;
     return NS_OK;  // XXX Why?
   }
+  // TODO - could make this an actual promise listener
+  TextEditor* localTextEditor = this;
   // Get the Data from the clipboard.
-  rv = clipboard->GetData(transferable, aClipboardType);
-  if (NS_FAILED(rv)) {
-    NS_WARNING("nsIClipboard::GetData() failed, but ignored");
-    return NS_OK;  // XXX Why?
-  }
-  // XXX Why don't we check this first?
-  if (!IsModifiable()) {
-    return NS_OK;
-  }
-  rv = InsertTextFromTransferable(transferable);
-  NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
-                       "TextEditor::InsertTextFromTransferable() failed");
-  return EditorBase::ToGenericNSResult(rv);
+  clipboard
+      ->AsyncGetData(transferable, aClipboardType, AsVariant(GetDocument()))
+      ->Then(
+          // TODO - is this the right target?
+          GetMainThreadSerialEventTarget(), __func__,
+          /* resolve*/
+          [transferable, localTextEditor, editActionData]() {
+            // XXX Why don't we check this first?
+            if (!localTextEditor->IsModifiable()) {
+              delete editActionData;
+              return;
+            }
+            nsresult rv =
+                localTextEditor->InsertTextFromTransferable(transferable);
+            NS_WARNING_ASSERTION(
+                NS_SUCCEEDED(rv),
+                "TextEditor::InsertTextFromTransferable() failed");
+            delete editActionData;
+          },
+          /* reject */
+          [editActionData]() {
+            // TODO - show notification?
+            NS_WARNING("nsIClipboard::GetData() failed, but ignored");
+            delete editActionData;
+          });
+  return NS_OK;
 }
 
 nsresult TextEditor::PasteTransferableAsAction(nsITransferable* aTransferable,

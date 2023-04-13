@@ -11,6 +11,16 @@
 #include "nsCOMPtr.h"
 #include "nsError.h"
 #include "nsXPCOM.h"
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
+#include "nsGlobalWindowInner.h"
+#include "mozilla/Components.h"
+#include "mozilla/dom/AutoEntryScript.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
+#include "mozilla/dom/Document.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsISupportsPrimitives.h"
 
 using mozilla::GenericPromise;
 using mozilla::LogLevel;
@@ -98,14 +108,136 @@ NS_IMETHODIMP nsBaseClipboard::GetData(nsITransferable* aTransferable,
   return NS_ERROR_FAILURE;
 }
 
+class ContentAnalysisPastePromiseListener
+    : public mozilla::dom::PromiseNativeHandler {
+  NS_DECL_ISUPPORTS
+  ContentAnalysisPastePromiseListener(
+      RefPtr<GenericPromise::Private> aOuterPromise)
+      : mOuterPromise(aOuterPromise) {}
+  virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    if (aValue.isObject()) {
+      auto* obj = aValue.toObjectOrNull();
+      // TODO is this handle thing ok?
+      JS::Handle<JSObject*> handle =
+          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+      JS::RootedValue actionValue(aCx);
+      // JS_HasProperty(aCx, handle, "action", &found);
+      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+        if (actionValue.isNumber()) {
+          double actionNumber = actionValue.toNumber();
+          // TODO - handle WARN case too
+          if (actionNumber ==
+              static_cast<double>(nsIContentAnalysisResponse::ALLOW)) {
+            mOuterPromise->Resolve(true, __func__);
+            return;
+          }
+        }
+      }
+    }
+    // TODO - indicate block to user
+    // TODO - probably need a better error code
+    mOuterPromise->Reject(NS_ERROR_PROXY_FORBIDDEN, __func__);
+  }
+
+  virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // call to content analysis failed
+    // TODO - indicate error to user
+    // TODO - probably need a better error code
+    mOuterPromise->Reject(NS_ERROR_PROXY_FORBIDDEN, __func__);
+  }
+
+ private:
+  ~ContentAnalysisPastePromiseListener() = default;
+  RefPtr<GenericPromise::Private> mOuterPromise;
+};
+
+NS_IMPL_ISUPPORTS0(ContentAnalysisPastePromiseListener)
+
 RefPtr<GenericPromise> nsBaseClipboard::AsyncGetData(
-    nsITransferable* aTransferable, int32_t aWhichClipboard) {
+    nsITransferable* aTransferable, int32_t aWhichClipboard,
+    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
+                     mozilla::dom::BrowserParent*>
+        aSource) {
+  // TODO - is this a race condition? Do we need to pass in a temporary
+  // nsITransferable here and copy it to the real one only if content analysis
+  // passes?
   nsresult rv = GetData(aTransferable, aWhichClipboard);
   if (NS_FAILED(rv)) {
     return GenericPromise::CreateAndReject(rv, __func__);
   }
 
-  return GenericPromise::CreateAndResolve(true, __func__);
+  // GenericPromise::ChainTo
+  mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+  mozilla::dom::BrowserParent* browser = nullptr;
+  if (aSource.is<mozilla::dom::BrowserParent*>()) {
+    browser = aSource.as<mozilla::dom::BrowserParent*>();
+  }
+  RefPtr<GenericPromise::Private> promiseToReturn = nullptr;
+  if (browser) {
+    nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+        mozilla::components::nsIContentAnalysis::Service(&rv);
+    if (NS_FAILED(rv)) {
+      return GenericPromise::CreateAndReject(rv, __func__);
+    }
+    bool contentAnalysisIsActive = false;
+    rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+    if (NS_FAILED(rv)) {
+      return GenericPromise::CreateAndReject(rv, __func__);
+    }
+    if (contentAnalysisIsActive) {
+      mozilla::dom::AutoEntryScript aes(
+          nsGlobalWindowInner::Cast(
+              browser->GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
+          "content analysis on clipboard copy");
+      nsAutoCString documentURICString;
+      RefPtr<nsIURI> currentURI =
+          browser->GetBrowsingContext()->GetCurrentURI();
+      rv = currentURI->GetSpec(documentURICString);
+      if (NS_FAILED(rv)) {
+        return GenericPromise::CreateAndReject(rv, __func__);
+      }
+      nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+      nsCOMPtr<nsISupports> transferData;
+      // TODO - is it OK if this fails? Probably, if there's no text equivalent?
+      rv = aTransferable->GetTransferData(kTextMime,
+                                          getter_AddRefs(transferData));
+      if (NS_FAILED(rv)) {
+        return GenericPromise::CreateAndReject(rv, __func__);
+      }
+      nsCOMPtr<nsISupportsString> textData = do_QueryInterface(transferData);
+      // TODO - is it OK if this fails? Seems like this shouldn't fail
+      nsString text;
+      if (textData) {
+        rv = textData->GetData(text);
+        if (NS_FAILED(rv)) {
+          return GenericPromise::CreateAndReject(rv, __func__);
+        }
+      }
+
+      nsCString emptyDigest;
+      // TODO - is BULK_DATA_ENTRY right?
+      nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+          new mozilla::contentanalysis::ContentAnalysisRequest(
+              nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text),
+              false, std::move(emptyDigest), std::move(documentURIString)));
+      rv = contentAnalysis->AnalyzeContentRequest(
+          contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+      // TODO handle error
+      if (NS_SUCCEEDED(rv)) {
+        promiseToReturn = new GenericPromise::Private(__func__);
+        RefPtr<ContentAnalysisPastePromiseListener> listener =
+            new ContentAnalysisPastePromiseListener(promiseToReturn);
+        contentAnalysisPromise->AppendNativeHandler(listener);
+      }
+    }
+  }
+  if (promiseToReturn) {
+    return promiseToReturn;
+  } else {
+    return GenericPromise::CreateAndResolve(true, __func__);
+  }
 }
 
 NS_IMETHODIMP nsBaseClipboard::EmptyClipboard(int32_t aWhichClipboard) {

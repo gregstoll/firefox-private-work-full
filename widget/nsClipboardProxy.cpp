@@ -136,7 +136,8 @@ RefPtr<DataFlavorsPromise> nsClipboardProxy::AsyncHasDataMatchingFlavors(
 }
 
 RefPtr<GenericPromise> nsClipboardProxy::AsyncGetData(
-    nsITransferable* aTransferable, int32_t aWhichClipboard) {
+    nsITransferable* aTransferable, int32_t aWhichClipboard,
+    Variant<Nothing, Document*, BrowserParent*> aSource) {
   if (!aTransferable) {
     return GenericPromise::CreateAndReject(NS_ERROR_FAILURE, __func__);
   }
@@ -150,8 +151,14 @@ RefPtr<GenericPromise> nsClipboardProxy::AsyncGetData(
 
   nsCOMPtr<nsITransferable> transferable(aTransferable);
   auto promise = MakeRefPtr<GenericPromise::Private>(__func__);
+  BrowserChild* browserChild = nullptr;
+  if (aSource.is<Document*>()) {
+    browserChild =
+        BrowserChild::GetFrom(aSource.as<Document*>()->GetDocShell());
+  }
+
   ContentChild::GetSingleton()
-      ->SendGetClipboardAsync(flavors, aWhichClipboard)
+      ->SendGetClipboardAsync(flavors, aWhichClipboard, browserChild)
       ->Then(
           GetMainThreadSerialEventTarget(), __func__,
           /* resolve */

@@ -8147,11 +8147,17 @@ void nsContentUtils::TransferableToIPCTransferable(
               AsIPCDataTransferString(NS_ConvertUTF8toUTF16(flavorStr));
           continue;
         }
+        // TODO - re the comment above, I think it is correct to continue here.
+        // Not doing so means that we serialize an empty string for the
+        // IPCDataTransferItem, which makes it look like we have a viable flavor
+        // but it's empty. This messes up copying plain text into
+        // contentEditable HTMLEditor's.
+        continue;
 
         // Empty element, transfer only the flavor
-        IPCDataTransferItem* item = aIPCDataTransfer->items().AppendElement();
+        /*IPCDataTransferItem* item = aIPCDataTransfer->items().AppendElement();
         item->flavor() = flavorStr;
-        item->data() = AsIPCDataTransferString(EmptyString());
+        item->data() = AsIPCDataTransferString(EmptyString());*/
         continue;
       }
 
@@ -8258,6 +8264,7 @@ void nsContentUtils::TransferableToIPCTransferable(
           continue;
         }
       } else {
+        // TODO - see comment above
         if (aInSyncMessage) {
           // Can't do anything.
           // FIXME: This shouldn't be the case anymore!

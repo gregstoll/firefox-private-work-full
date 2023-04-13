@@ -3112,7 +3112,10 @@ class HTMLEditor final : public EditorBase,
    * @param aClipboardType      nsIClipboard::kGlobalClipboard or
    *                            nsIClipboard::kSelectionClipboard.
    */
-  MOZ_CAN_RUN_SCRIPT nsresult PasteInternal(int32_t aClipboardType);
+  template <typename PointedType>
+  MOZ_CAN_RUN_SCRIPT nsresult PasteInternal(int32_t aClipboardType,
+                                            void (*callback)(PointedType*),
+                                            PointedType* arg);
 
   [[nodiscard]] MOZ_CAN_RUN_SCRIPT nsresult
   InsertWithQuotationsAsSubAction(const nsAString& aQuotedText) final;
@@ -4366,6 +4369,11 @@ class HTMLEditor final : public EditorBase,
     MOZ_KNOWN_LIVE HTMLEditor& mHTMLEditor;
     const char* const mRequesterFuncName;
   };
+
+  template <typename PointedType>
+  static void DeleteItem(PointedType* item) {
+    delete item;
+  }
 
   RefPtr<PendingStyles> mPendingStylesToApplyToNewContent;
   RefPtr<ComposerCommandsUpdater> mComposerCommandsUpdater;

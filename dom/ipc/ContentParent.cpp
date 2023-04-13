@@ -3611,7 +3611,7 @@ mozilla::ipc::IPCResult ContentParent::RecvGetExternalClipboardFormats(
 
 mozilla::ipc::IPCResult ContentParent::RecvGetClipboardAsync(
     nsTArray<nsCString>&& aTypes, const int32_t& aWhichClipboard,
-    GetClipboardAsyncResolver&& aResolver) {
+    PBrowserParent* aBrowser, GetClipboardAsyncResolver&& aResolver) {
   nsresult rv;
   // Retrieve clipboard
   nsCOMPtr<nsIClipboard> clipboard(do_GetService(kCClipboardCID, &rv));
@@ -3629,10 +3629,19 @@ mozilla::ipc::IPCResult ContentParent::RecvGetClipboardAsync(
 
   // Get data from clipboard
   nsCOMPtr<nsITransferable> trans = result.unwrap();
-  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
+  BrowserParent* parent = nullptr;
+  if (aBrowser) {
+    parent = BrowserParent::GetFrom(aBrowser);
+  }
+  clipboard
+      ->AsyncGetData(trans, nsIClipboard::kGlobalClipboard, AsVariant(parent))
       ->Then(GetMainThreadSerialEventTarget(), __func__,
              [trans, aResolver, self = RefPtr{this}](
                  GenericPromise::ResolveOrRejectValue&& aValue) {
+               if (aValue.IsReject()) {
+                 aResolver(aValue.RejectValue());
+                 return;
+               }
                IPCDataTransfer ipcDataTransfer;
                nsContentUtils::TransferableToIPCTransferable(
                    trans, &ipcDataTransfer, false /* aInSyncMessage */, self);

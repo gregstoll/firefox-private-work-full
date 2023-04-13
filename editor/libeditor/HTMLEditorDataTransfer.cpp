@@ -2268,35 +2268,46 @@ nsresult HTMLEditor::PasteAsAction(int32_t aClipboardType,
     return NS_OK;
   }
 
-  AutoEditActionDataSetter editActionData(*this, EditAction::ePaste,
-                                          aPrincipal);
-  if (NS_WARN_IF(!editActionData.CanHandle())) {
+  AutoEditActionDataSetter* editActionData =
+      new AutoEditActionDataSetter(*this, EditAction::ePaste, aPrincipal);
+  if (NS_WARN_IF(!editActionData->CanHandle())) {
+    delete editActionData;
     return NS_ERROR_NOT_INITIALIZED;
   }
 
   if (aDispatchPasteEvent) {
     if (!FireClipboardEvent(ePaste, aClipboardType)) {
+      delete editActionData;
       return EditorBase::ToGenericNSResult(NS_ERROR_EDITOR_ACTION_CANCELED);
     }
   } else {
     // The caller must already have dispatched a "paste" event.
-    editActionData.NotifyOfDispatchingClipboardEvent();
+    editActionData->NotifyOfDispatchingClipboardEvent();
   }
 
-  editActionData.InitializeDataTransferWithClipboard(
+  editActionData->InitializeDataTransferWithClipboard(
       SettingDataTransfer::eWithFormat, aClipboardType);
-  nsresult rv = editActionData.CanHandleAndMaybeDispatchBeforeInputEvent();
+  nsresult rv = editActionData->CanHandleAndMaybeDispatchBeforeInputEvent();
   if (NS_FAILED(rv)) {
     NS_WARNING_ASSERTION(rv == NS_ERROR_EDITOR_ACTION_CANCELED,
                          "CanHandleAndMaybeDispatchBeforeInputEvent() failed");
+    delete editActionData;
     return EditorBase::ToGenericNSResult(rv);
   }
-  rv = PasteInternal(aClipboardType);
+  // rv = PasteInternal(aClipboardType,
+  // HTMLEditor::DeleteItem<decltype(*editActionData)>, editActionData); auto f
+  // = HTMLEditor::DeleteItem<AutoEditActionDataSetter>;
+  rv = PasteInternal(aClipboardType,
+                     &HTMLEditor::DeleteItem<AutoEditActionDataSetter>,
+                     editActionData);
   NS_WARNING_ASSERTION(NS_SUCCEEDED(rv), "HTMLEditor::PasteInternal() failed");
   return EditorBase::ToGenericNSResult(rv);
 }
 
-nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
+template <typename PointedType>
+nsresult HTMLEditor::PasteInternal(int32_t aClipboardType,
+                                   void (*callback)(PointedType*),
+                                   PointedType* arg) {
   MOZ_ASSERT(IsEditActionDataAvailable());
 
   // Get Clipboard Service
@@ -2305,6 +2316,7 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
       do_GetService("@mozilla.org/widget/clipboard;1", &rv);
   if (NS_FAILED(rv)) {
     NS_WARNING("Failed to get nsIClipboard service");
+    callback(arg);
     return rv;
   }
 
@@ -2313,6 +2325,7 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
   rv = PrepareHTMLTransferable(getter_AddRefs(transferable));
   if (NS_FAILED(rv)) {
     NS_WARNING("HTMLEditor::PrepareHTMLTransferable() failed");
+    callback(arg);
     return rv;
   }
   if (!transferable) {
@@ -2320,96 +2333,131 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
     return NS_ERROR_FAILURE;
   }
   // Get the Data from the clipboard
-  rv = clipboard->GetData(transferable, aClipboardType);
-  if (NS_FAILED(rv)) {
-    NS_WARNING("nsIClipboard::GetData() failed");
-    return rv;
-  }
+  // TODO - could make this an actual promise listener
+  HTMLEditor* localHtmlEditor = this;
+  // TODO - we should probably be returning the nsresult from here through the
+  // callback?
+  clipboard
+      ->AsyncGetData(transferable, aClipboardType, AsVariant(GetDocument()))
+      ->Then(
+          // TODO - is this the right target?
+          GetMainThreadSerialEventTarget(), __func__,
+          /* resolve*/
+          [transferable, clipboard, aClipboardType, localHtmlEditor, callback,
+           arg]() {
+            nsresult rv = NS_OK;
+            // XXX Why don't you check this first?
+            if (!localHtmlEditor->IsModifiable()) {
+              callback(arg);
+              return;
+            }
+            // also get additional html copy hints, if present
+            nsAutoString contextStr, infoStr;
 
-  // XXX Why don't you check this first?
-  if (!IsModifiable()) {
-    return NS_OK;
-  }
+            // If we have our internal html flavor on the clipboard, there is
+            // special context to use instead of cfhtml context.
+            const HavePrivateHTMLFlavor clipboardHasPrivateHTMLFlavor =
+                ClipboardHasPrivateHTMLFlavor(clipboard);
+            if (clipboardHasPrivateHTMLFlavor == HavePrivateHTMLFlavor::Yes) {
+              nsCOMPtr<nsITransferable> contextTransferable =
+                  do_CreateInstance("@mozilla.org/widget/transferable;1");
+              if (!contextTransferable) {
+                NS_WARNING(
+                    "do_CreateInstance() failed to create nsITransferable "
+                    "instance");
+                callback(arg);
+                // return NS_ERROR_FAILURE;
+                return;
+              }
+              DebugOnly<nsresult> rvIgnored =
+                  contextTransferable->Init(nullptr);
+              NS_WARNING_ASSERTION(
+                  NS_SUCCEEDED(rvIgnored),
+                  "nsITransferable::Init() failed, but ignored");
+              contextTransferable->SetIsPrivateData(
+                  transferable->GetIsPrivateData());
+              rvIgnored = contextTransferable->AddDataFlavor(kHTMLContext);
+              NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
+                                   "nsITransferable::AddDataFlavor("
+                                   "kHTMLContext) failed, but ignored");
+              rvIgnored =
+                  clipboard->GetData(contextTransferable, aClipboardType);
+              NS_WARNING_ASSERTION(
+                  NS_SUCCEEDED(rvIgnored),
+                  "nsIClipboard::GetData() failed, but ignored");
+              nsCOMPtr<nsISupports> contextDataObj;
+              rv = contextTransferable->GetTransferData(
+                  kHTMLContext, getter_AddRefs(contextDataObj));
+              if (NS_SUCCEEDED(rv) && contextDataObj) {
+                if (nsCOMPtr<nsISupportsString> str =
+                        do_QueryInterface(contextDataObj)) {
+                  DebugOnly<nsresult> rvIgnored = str->GetData(contextStr);
+                  NS_WARNING_ASSERTION(
+                      NS_SUCCEEDED(rvIgnored),
+                      "nsISupportsString::GetData() failed, but ignored");
+                }
+              }
 
-  // also get additional html copy hints, if present
-  nsAutoString contextStr, infoStr;
+              nsCOMPtr<nsITransferable> infoTransferable =
+                  do_CreateInstance("@mozilla.org/widget/transferable;1");
+              if (!infoTransferable) {
+                NS_WARNING(
+                    "do_CreateInstance() failed to create nsITransferable "
+                    "instance");
+                callback(arg);
+                // return NS_ERROR_FAILURE;
+                return;
+              }
+              rvIgnored = infoTransferable->Init(nullptr);
+              NS_WARNING_ASSERTION(
+                  NS_SUCCEEDED(rv),
+                  "nsITransferable::Init() failed, but ignored");
+              contextTransferable->SetIsPrivateData(
+                  transferable->GetIsPrivateData());
+              rvIgnored = infoTransferable->AddDataFlavor(kHTMLInfo);
+              NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
+                                   "nsITransferable::AddDataFlavor(kHTMLInfo) "
+                                   "failed, but ignored");
+              clipboard->GetData(infoTransferable, aClipboardType);
+              NS_WARNING_ASSERTION(
+                  NS_SUCCEEDED(rvIgnored),
+                  "nsIClipboard::GetData() failed, but ignored");
+              nsCOMPtr<nsISupports> infoDataObj;
+              rv = infoTransferable->GetTransferData(
+                  kHTMLInfo, getter_AddRefs(infoDataObj));
+              if (NS_SUCCEEDED(rv) && infoDataObj) {
+                if (nsCOMPtr<nsISupportsString> str =
+                        do_QueryInterface(infoDataObj)) {
+                  DebugOnly<nsresult> rvIgnored = str->GetData(infoStr);
+                  NS_WARNING_ASSERTION(
+                      NS_SUCCEEDED(rvIgnored),
+                      "nsISupportsString::GetData() failed, but ignored");
+                }
+              }
+            }
 
-  // If we have our internal html flavor on the clipboard, there is special
-  // context to use instead of cfhtml context.
-  const HavePrivateHTMLFlavor clipboardHasPrivateHTMLFlavor =
-      ClipboardHasPrivateHTMLFlavor(clipboard);
-  if (clipboardHasPrivateHTMLFlavor == HavePrivateHTMLFlavor::Yes) {
-    nsCOMPtr<nsITransferable> contextTransferable =
-        do_CreateInstance("@mozilla.org/widget/transferable;1");
-    if (!contextTransferable) {
-      NS_WARNING(
-          "do_CreateInstance() failed to create nsITransferable instance");
-      return NS_ERROR_FAILURE;
-    }
-    DebugOnly<nsresult> rvIgnored = contextTransferable->Init(nullptr);
-    NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
-                         "nsITransferable::Init() failed, but ignored");
-    contextTransferable->SetIsPrivateData(transferable->GetIsPrivateData());
-    rvIgnored = contextTransferable->AddDataFlavor(kHTMLContext);
-    NS_WARNING_ASSERTION(
-        NS_SUCCEEDED(rvIgnored),
-        "nsITransferable::AddDataFlavor(kHTMLContext) failed, but ignored");
-    rvIgnored = clipboard->GetData(contextTransferable, aClipboardType);
-    NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
-                         "nsIClipboard::GetData() failed, but ignored");
-    nsCOMPtr<nsISupports> contextDataObj;
-    rv = contextTransferable->GetTransferData(kHTMLContext,
-                                              getter_AddRefs(contextDataObj));
-    if (NS_SUCCEEDED(rv) && contextDataObj) {
-      if (nsCOMPtr<nsISupportsString> str = do_QueryInterface(contextDataObj)) {
-        DebugOnly<nsresult> rvIgnored = str->GetData(contextStr);
-        NS_WARNING_ASSERTION(
-            NS_SUCCEEDED(rvIgnored),
-            "nsISupportsString::GetData() failed, but ignored");
-      }
-    }
-
-    nsCOMPtr<nsITransferable> infoTransferable =
-        do_CreateInstance("@mozilla.org/widget/transferable;1");
-    if (!infoTransferable) {
-      NS_WARNING(
-          "do_CreateInstance() failed to create nsITransferable instance");
-      return NS_ERROR_FAILURE;
-    }
-    rvIgnored = infoTransferable->Init(nullptr);
-    NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
-                         "nsITransferable::Init() failed, but ignored");
-    contextTransferable->SetIsPrivateData(transferable->GetIsPrivateData());
-    rvIgnored = infoTransferable->AddDataFlavor(kHTMLInfo);
-    NS_WARNING_ASSERTION(
-        NS_SUCCEEDED(rvIgnored),
-        "nsITransferable::AddDataFlavor(kHTMLInfo) failed, but ignored");
-    clipboard->GetData(infoTransferable, aClipboardType);
-    NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
-                         "nsIClipboard::GetData() failed, but ignored");
-    nsCOMPtr<nsISupports> infoDataObj;
-    rv = infoTransferable->GetTransferData(kHTMLInfo,
-                                           getter_AddRefs(infoDataObj));
-    if (NS_SUCCEEDED(rv) && infoDataObj) {
-      if (nsCOMPtr<nsISupportsString> str = do_QueryInterface(infoDataObj)) {
-        DebugOnly<nsresult> rvIgnored = str->GetData(infoStr);
-        NS_WARNING_ASSERTION(
-            NS_SUCCEEDED(rvIgnored),
-            "nsISupportsString::GetData() failed, but ignored");
-      }
-    }
-  }
-
-  rv = InsertFromTransferableAtSelection(transferable, contextStr, infoStr,
-                                         clipboardHasPrivateHTMLFlavor);
-  NS_WARNING_ASSERTION(
-      NS_SUCCEEDED(rv),
-      "HTMLEditor::InsertFromTransferableAtSelection() failed");
+            rv = localHtmlEditor->InsertFromTransferableAtSelection(
+                transferable, contextStr, infoStr,
+                clipboardHasPrivateHTMLFlavor);
+            NS_WARNING_ASSERTION(
+                NS_SUCCEEDED(rv),
+                "HTMLEditor::InsertFromTransferableAtSelection() failed");
+            callback(arg);
+            // TODO
+            // return rv;
+          },
+          /* reject */
+          [callback, arg]() {
+            NS_WARNING("nsIClipboard::GetData() failed");
+            callback(arg);
+          });
   return rv;
 }
 
 nsresult HTMLEditor::PasteTransferableAsAction(nsITransferable* aTransferable,
                                                nsIPrincipal* aPrincipal) {
+  // TODO - do we need to fix up this method to use content analysis too?
+  // Probably.
   // FIXME: This may be called as a call of nsIEditor::PasteTransferable.
   // In this case, we should keep handling the paste even in the readonly mode.
   if (IsReadonly()) {
@@ -2468,30 +2516,34 @@ nsresult HTMLEditor::PasteNoFormattingAsAction(int32_t aSelectionType,
     return NS_OK;
   }
 
-  AutoEditActionDataSetter editActionData(*this, EditAction::ePaste,
-                                          aPrincipal);
-  if (NS_WARN_IF(!editActionData.CanHandle())) {
+  AutoEditActionDataSetter* editActionData =
+      new AutoEditActionDataSetter(*this, EditAction::ePaste, aPrincipal);
+  if (NS_WARN_IF(!editActionData->CanHandle())) {
+    delete editActionData;
     return NS_ERROR_NOT_INITIALIZED;
   }
-  editActionData.InitializeDataTransferWithClipboard(
+  editActionData->InitializeDataTransferWithClipboard(
       SettingDataTransfer::eWithoutFormat, aSelectionType);
 
   if (!FireClipboardEvent(ePasteNoFormatting, aSelectionType)) {
+    delete editActionData;
     return EditorBase::ToGenericNSResult(NS_ERROR_EDITOR_ACTION_CANCELED);
   }
 
   // Dispatch "beforeinput" event after "paste" event.  And perhaps, before
   // committing composition because if pasting is canceled, we don't need to
   // commit the active composition.
-  nsresult rv = editActionData.MaybeDispatchBeforeInputEvent();
+  nsresult rv = editActionData->MaybeDispatchBeforeInputEvent();
   if (NS_FAILED(rv)) {
     NS_WARNING_ASSERTION(rv == NS_ERROR_EDITOR_ACTION_CANCELED,
                          "MaybeDispatchBeforeInputEvent(), failed");
+    delete editActionData;
     return EditorBase::ToGenericNSResult(rv);
   }
 
   DebugOnly<nsresult> rvIgnored = CommitComposition();
   if (NS_WARN_IF(Destroyed())) {
+    delete editActionData;
     return EditorBase::ToGenericNSResult(NS_ERROR_EDITOR_DESTROYED);
   }
   NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
@@ -2502,11 +2554,13 @@ nsresult HTMLEditor::PasteNoFormattingAsAction(int32_t aSelectionType,
       do_GetService("@mozilla.org/widget/clipboard;1", &rv));
   if (NS_FAILED(rv)) {
     NS_WARNING("Failed to get nsIClipboard service");
+    delete editActionData;
     return rv;
   }
 
   if (!GetDocument()) {
     NS_WARNING("Editor didn't have document, but ignored");
+    delete editActionData;
     return NS_OK;
   }
 
@@ -2514,6 +2568,7 @@ nsresult HTMLEditor::PasteNoFormattingAsAction(int32_t aSelectionType,
       EditorUtils::CreateTransferableForPlainText(*GetDocument());
   if (maybeTransferable.isErr()) {
     NS_WARNING("EditorUtils::CreateTransferableForPlainText() failed");
+    delete editActionData;
     return EditorBase::ToGenericNSResult(maybeTransferable.unwrapErr());
   }
   nsCOMPtr<nsITransferable> transferable(maybeTransferable.unwrap());
@@ -2521,25 +2576,41 @@ nsresult HTMLEditor::PasteNoFormattingAsAction(int32_t aSelectionType,
     NS_WARNING(
         "EditorUtils::CreateTransferableForPlainText() returned nullptr, but "
         "ignored");
+    delete editActionData;
     return NS_OK;
   }
 
   if (!IsModifiable()) {
+    delete editActionData;
     return NS_OK;
   }
 
   // Get the Data from the clipboard
-  rv = clipboard->GetData(transferable, aSelectionType);
-  if (NS_FAILED(rv)) {
-    NS_WARNING("nsIClipboard::GetData() failed");
-    return rv;
-  }
-
-  rv = InsertFromTransferableAtSelection(transferable, u""_ns, u""_ns,
-                                         HavePrivateHTMLFlavor::No);
-  NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
-                       "HTMLEditor::InsertFromTransferableAtSelection("
-                       "HavePrivateHTMLFlavor::No) failed");
+  // TODO - could make this an actual promise listener
+  HTMLEditor* localHtmlEditor = this;
+  clipboard
+      ->AsyncGetData(transferable, aSelectionType, AsVariant(GetDocument()))
+      ->Then(
+          // TODO - is this the right target?
+          GetMainThreadSerialEventTarget(), __func__,
+          /* resolve*/
+          [transferable, localHtmlEditor, editActionData]() {
+            nsresult rv = NS_OK;
+            rv = localHtmlEditor->InsertFromTransferableAtSelection(
+                transferable, u""_ns, u""_ns, HavePrivateHTMLFlavor::No);
+            NS_WARNING_ASSERTION(
+                NS_SUCCEEDED(rv),
+                "HTMLEditor::InsertFromTransferableAtSelection("
+                "HavePrivateHTMLFlavor::No) failed");
+            // TODO - return this somehow?
+            // return EditorBase::ToGenericNSResult(rv);
+            delete editActionData;
+          },
+          /* reject */
+          [editActionData]() {
+            NS_WARNING("nsIClipboard::AsyncGetData() failed");
+            delete editActionData;
+          });
   return EditorBase::ToGenericNSResult(rv);
 }
 
@@ -2687,9 +2758,11 @@ nsresult HTMLEditor::PasteAsQuotationAsAction(int32_t aClipboardType,
   AutoPlaceholderBatch treatAsOneTransaction(
       *this, ScrollSelectionIntoView::Yes, __FUNCTION__);
   IgnoredErrorResult ignoredError;
-  AutoEditSubActionNotifier startToHandleEditSubAction(
-      *this, EditSubAction::eInsertQuotation, nsIEditor::eNext, ignoredError);
+  AutoEditSubActionNotifier* startToHandleEditSubAction =
+      new AutoEditSubActionNotifier(*this, EditSubAction::eInsertQuotation,
+                                    nsIEditor::eNext, ignoredError);
   if (NS_WARN_IF(ignoredError.ErrorCodeIs(NS_ERROR_EDITOR_DESTROYED))) {
+    delete startToHandleEditSubAction;
     return ignoredError.StealNSResult();
   }
   NS_WARNING_ASSERTION(
@@ -2698,6 +2771,7 @@ nsresult HTMLEditor::PasteAsQuotationAsAction(int32_t aClipboardType,
 
   rv = EnsureNoPaddingBRElementForEmptyEditor();
   if (NS_WARN_IF(rv == NS_ERROR_EDITOR_DESTROYED)) {
+    delete startToHandleEditSubAction;
     return EditorBase::ToGenericNSResult(NS_ERROR_EDITOR_DESTROYED);
   }
   NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
@@ -2707,6 +2781,7 @@ nsresult HTMLEditor::PasteAsQuotationAsAction(int32_t aClipboardType,
   if (NS_SUCCEEDED(rv) && SelectionRef().IsCollapsed()) {
     nsresult rv = EnsureCaretNotAfterInvisibleBRElement();
     if (NS_WARN_IF(rv == NS_ERROR_EDITOR_DESTROYED)) {
+      delete startToHandleEditSubAction;
       return EditorBase::ToGenericNSResult(NS_ERROR_EDITOR_DESTROYED);
     }
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
@@ -2715,6 +2790,7 @@ nsresult HTMLEditor::PasteAsQuotationAsAction(int32_t aClipboardType,
     if (NS_SUCCEEDED(rv)) {
       nsresult rv = PrepareInlineStylesForCaret();
       if (NS_WARN_IF(rv == NS_ERROR_EDITOR_DESTROYED)) {
+        delete startToHandleEditSubAction;
         return EditorBase::ToGenericNSResult(NS_ERROR_EDITOR_DESTROYED);
       }
       NS_WARNING_ASSERTION(
@@ -2749,6 +2825,7 @@ nsresult HTMLEditor::PasteAsQuotationAsAction(int32_t aClipboardType,
     NS_WARNING(
         "HTMLEditor::DeleteSelectionAndCreateElement(nsGkAtoms::blockquote) "
         "failed");
+    delete startToHandleEditSubAction;
     return Destroyed() ? NS_ERROR_EDITOR_DESTROYED
                        : blockquoteElementOrError.unwrapErr();
   }
@@ -2759,10 +2836,16 @@ nsresult HTMLEditor::PasteAsQuotationAsAction(int32_t aClipboardType,
       MOZ_KnownLive(*blockquoteElementOrError.inspect()));
   if (MOZ_UNLIKELY(NS_FAILED(rv))) {
     NS_WARNING("EditorBase::CollapseSelectionToStartOf() failed");
+    delete startToHandleEditSubAction;
     return rv;
   }
 
-  rv = PasteInternal(aClipboardType);
+  // rv = PasteInternal(aClipboardType,
+  // HTMLEditor::DeleteItem<decltype(*startToHandleEditSubAction)>,
+  // startToHandleEditSubAction);
+  rv = PasteInternal(aClipboardType,
+                     HTMLEditor::DeleteItem<AutoEditSubActionNotifier>,
+                     startToHandleEditSubAction);
   NS_WARNING_ASSERTION(NS_SUCCEEDED(rv), "HTMLEditor::PasteInternal() failed");
   return EditorBase::ToGenericNSResult(rv);
 }

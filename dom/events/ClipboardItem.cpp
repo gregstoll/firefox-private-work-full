@@ -49,7 +49,10 @@ void ClipboardItem::ItemEntry::LoadData(nsIGlobalObject& aGlobal,
   }
 
   nsCOMPtr<nsITransferable> trans(&aTransferable);
-  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
+  // TODO - what to pass here?
+  clipboard
+      ->AsyncGetData(trans, nsIClipboard::kGlobalClipboard,
+                     AsVariant(Nothing()))
       ->Then(
           GetMainThreadSerialEventTarget(), __func__,
           /* resolved */

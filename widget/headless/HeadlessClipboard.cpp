@@ -105,7 +105,9 @@ HeadlessClipboard::IsClipboardTypeSupported(int32_t aWhichClipboard,
 }
 
 RefPtr<GenericPromise> HeadlessClipboard::AsyncGetData(
-    nsITransferable* aTransferable, int32_t aWhichClipboard) {
+    nsITransferable* aTransferable, int32_t aWhichClipboard,
+    Variant<Nothing, mozilla::dom::Document*, mozilla::dom::BrowserParent*>
+        aSource) {
   nsresult rv = GetData(aTransferable, aWhichClipboard);
   if (NS_FAILED(rv)) {
     return GenericPromise::CreateAndReject(rv, __func__);
