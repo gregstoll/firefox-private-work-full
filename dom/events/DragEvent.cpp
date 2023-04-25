@@ -5,12 +5,130 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "mozilla/dom/DragEvent.h"
+
+#include "mozilla/Components.h"
+#include "mozilla/dom/BlobImpl.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/MouseEventBinding.h"
 #include "mozilla/MouseEvents.h"
+#include "mozilla/SpinEventLoopUntil.h"
+
+#include "ContentAnalysis.h"
 #include "nsContentUtils.h"
+#include "nsIContentAnalysis.h"
+
 #include "prtime.h"
 
 namespace mozilla::dom {
+
+using ContentAnalysisPermissionResult = mozilla::Result<bool, nsresult>;
+
+static ContentAnalysisPermissionResult
+CheckContentAnalysisPermission(nsCOMPtr<DataTransfer> aDataTransfer, RefPtr<nsPresContext> aPresContext) {
+  if (!aPresContext || !aPresContext->GetDocShell()) {
+    return true;
+  }
+
+  BrowserChild* browserChild =
+      BrowserChild::GetFrom(aPresContext->GetDocShell());
+  if (!browserChild) {
+    return true;
+  }
+
+  // Check content of drop events to verify that they are permitted by
+  // content analysis.
+  nsCOMPtr<nsIDragSession> dragSession = nsContentUtils::GetDragSession();
+  if (NS_WARN_IF(!dragSession)) {
+    return true;
+  }
+
+  nsCOMPtr<nsIPrincipal> principal;
+  dragSession->GetTriggeringPrincipal(getter_AddRefs(principal));
+  if (!principal) {
+    principal = nsContentUtils::GetSystemPrincipal();
+  }
+  MOZ_ASSERT(principal);
+
+  nsresult rv = NS_OK;
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      mozilla::components::nsIContentAnalysis::Service(&rv);
+  NS_ENSURE_SUCCESS(rv, true);
+
+  bool contentAnalysisMightBeActive = false;
+  rv = contentAnalysis->GetMightBeActive(
+      &contentAnalysisMightBeActive);
+  NS_ENSURE_SUCCESS(rv, Err(rv));
+
+  if (!contentAnalysisMightBeActive) {
+    return true;
+  }
+
+  // Hold a strong reference during the event loop below.
+  RefPtr<const DataTransferItemList> itemList = aDataTransfer->Items();
+
+  // TODO - do these get grouped together? And should they get
+  // grouped with the files too?
+  nsTArray<nsString> filePaths;
+  for (uint32_t i = 0; i < itemList->Length(); ++i) {
+    bool found;
+    DataTransferItem* item = itemList->IndexedGetter(i, found);
+    if (item->Kind() == DataTransferItem::KIND_FILE) {
+      nsString path;
+      ErrorResult errorResult;
+      // TODO - is this the right principal?
+      // TODO - not using this errorResult right
+      nsCOMPtr<nsIVariant> data = item->Data(principal, errorResult);
+      nsCOMPtr<nsISupports> supports;
+      errorResult = data->GetAsISupports(getter_AddRefs(supports));
+      MOZ_ASSERT(
+          !errorResult.Failed() && supports,
+          "File objects should be stored as nsISupports variants");
+      if (nsCOMPtr<BlobImpl> blobImpl =
+              do_QueryInterface(supports)) {
+        MOZ_ASSERT(blobImpl->IsFile());
+        blobImpl->GetMozFullPath(path, SystemCallerGuarantee(),
+                                 errorResult);
+      } else if (nsCOMPtr<nsIFile> ifile =
+                     do_QueryInterface(supports)) {
+        ifile->GetPath(path);
+      }
+      // item->GetMozFullPathInternal(path, errorResult);
+      //  TODO - is this error handling ok?
+      nsresult localRv = errorResult.StealNSResult();
+      if (NS_SUCCEEDED(localRv) && !path.IsEmpty()) {
+        filePaths.EmplaceBack(std::move(path));
+      }
+    }
+  }
+
+  if (!filePaths.IsEmpty()) {
+    Maybe<bool> result;
+    browserChild
+        ->SendDoDragAndDropFilesContentAnalysis(std::move(filePaths))
+        ->Then(
+            GetCurrentSerialEventTarget(), __func__,
+            /* resolve */
+            [&result](const contentanalysis::MaybeContentAnalysisResult& aResult) {
+              result = Some(aResult.ShouldAllowContent());
+            },
+            /* reject */
+            [&result](mozilla::ipc::ResponseRejectReason aReason) {
+              result = Some(false);
+            });
+
+    SpinEventLoopUntil("SendDoDragAndDropFilesContentAnalysis"_ns,
+      [&result]() -> bool {
+        return result.isSome();
+      });
+
+    if (!(*result)) {
+      // Rejected by content analysis
+      return false;
+    }
+  }
+
+  return true;
+}
 
 DragEvent::DragEvent(EventTarget* aOwner, nsPresContext* aPresContext,
                      WidgetDragEvent* aEvent)
@@ -59,9 +177,20 @@ DataTransfer* DragEvent::GetDataTransfer() {
   WidgetDragEvent* dragEvent = mEvent->AsDragEvent();
   // for synthetic events, just use the supplied data transfer object even if
   // null
-  if (!mEventIsInternal) {
+  if (!mEventIsInternal && !dragEvent->mDataTransfer) {
+    MOZ_ASSERT(!mDragSession);
+    mDragSession = nsContentUtils::GetDragSession();
     nsresult rv = nsContentUtils::SetDataTransferInEvent(dragEvent);
     NS_ENSURE_SUCCESS(rv, nullptr);
+
+    if (dragEvent->mMessage == eDrop) {
+      ContentAnalysisPermissionResult permission =
+          CheckContentAnalysisPermission(do_AddRef(dragEvent->mDataTransfer), mPresContext);
+      if (!permission.unwrapOr(false)) {
+        // Content analysis rejected the drop or there was an error so we reject.
+        dragEvent->mDataTransfer->ClearAll();
+      }
+    }
   }
 
   return dragEvent->mDataTransfer;
