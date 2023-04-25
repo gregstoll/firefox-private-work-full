@@ -34,8 +34,8 @@ struct MaybeContentAnalysisResult {
 
   bool ShouldAllowContent() const {
     if (value.is<NoContentAnalysisResult>()) {
-      NoContentAnalysisResult result = value.as<NoContentAnalysisResult>();
-      return result == NoContentAnalysisResult::AGENT_NOT_PRESENT || result == NoContentAnalysisResult::NO_PARENT_BROWSER;
+      NoContentAnalysisResult noResult = value.as<NoContentAnalysisResult>();
+      return noResult == NoContentAnalysisResult::AGENT_NOT_PRESENT || noResult == NoContentAnalysisResult::NO_PARENT_BROWSER;
     }
     int32_t responseCode = value.as<int32_t>();
     return responseCode == nsIContentAnalysisResponse::ALLOW ||
