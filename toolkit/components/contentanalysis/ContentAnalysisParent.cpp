@@ -4,6 +4,7 @@
 
 #include "ContentAnalysisParent.h"
 #include "ContentAnalysis.h"
+#include "ErrorList.h"
 #include "nsIContentAnalysis.h"
 #include "nsISupportsImpl.h"
 #include "nsITransferable.h"
@@ -15,15 +16,18 @@
 #include "mozilla/dom/CanonicalBrowsingContext.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsIFile.h"
 #include "nsISupportsPrimitives.h"
+#include "GMPUtils.h"
+#include "ScopedNSSTypes.h"
 
 namespace mozilla::contentanalysis {
 
 namespace {
-class ContentAnalysisPastePromiseListener
+class ContentAnalysisPromiseListener
     : public mozilla::dom::PromiseNativeHandler {
   NS_DECL_ISUPPORTS
-  ContentAnalysisPastePromiseListener(
+  ContentAnalysisPromiseListener(
       PContentAnalysisParent::DoClipboardContentAnalysisResolver aResolver,
       mozilla::dom::Promise* aContentAnalysisPromise)
       : mResolver(aResolver),
@@ -59,13 +63,13 @@ class ContentAnalysisPastePromiseListener
   }
 
  private:
-  ~ContentAnalysisPastePromiseListener() = default;
+  ~ContentAnalysisPromiseListener() = default;
   PContentAnalysisParent::DoClipboardContentAnalysisResolver mResolver;
   mozilla::dom::Promise* mContentAnalysisPromise;
 };
 }  // namespace
 
-NS_IMPL_ISUPPORTS0(ContentAnalysisPastePromiseListener)
+NS_IMPL_ISUPPORTS0(ContentAnalysisPromiseListener)
 
 mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
     const layers::LayersId& layersId, const IPCTransferableData& aData,
@@ -153,8 +157,8 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
   rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
                                               &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
-    RefPtr<ContentAnalysisPastePromiseListener> listener =
-        new ContentAnalysisPastePromiseListener(aResolver,
+    RefPtr<ContentAnalysisPromiseListener> listener =
+        new ContentAnalysisPromiseListener(aResolver,
                                                 contentAnalysisPromise);
     contentAnalysisPromise->AppendNativeHandler(listener);
   } else {
@@ -163,4 +167,115 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
   }
   return IPC_OK();
 }
+
+mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
+    const layers::LayersId& aLayersId,
+    nsTArray<nsString>&& aFilePaths,
+    DoClipboardContentAnalysisResolver&& aResolver) {
+  nsresult rv;
+  mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      mozilla::components::nsIContentAnalysis::Service(&rv);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  bool contentAnalysisIsActive = false;
+  rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+  if (MOZ_LIKELY(!contentAnalysisIsActive)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+  nsAutoCString documentURICString;
+  mozilla::dom::BrowserParent* parent = mozilla::dom::BrowserParent::GetBrowserParentFromLayersId(aLayersId);
+  RefPtr<nsIURI> currentURI = parent->GetBrowsingContext()->GetCurrentURI();
+  rv = currentURI->GetSpec(documentURICString);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+
+  // TODO
+  nsString filePath = aFilePaths[0];
+  // TODO handle error
+  // TODO - is FILE_ATTACHED right?
+  mozilla::Digest digest;
+  digest.Begin(SEC_OID_SHA256);
+  PRFileDesc* fd = nullptr;
+  nsCOMPtr<nsIFile> file =
+      do_CreateInstance("@mozilla.org/file/local;1", &rv);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+
+  rv = file->InitWithPath(filePath);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  rv = file->OpenNSPRFileDesc(PR_RDONLY | nsIFile::OS_READAHEAD, 0, &fd);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  // TODO - is this too small? Or is there a better way to do this?
+  uint8_t buffer[4096];
+  PRInt32 bytesRead;
+  bytesRead = PR_Read(fd, buffer, sizeof(buffer) / sizeof(uint8_t));
+  while (bytesRead != 0) {
+    if (bytesRead == -1) {
+      PR_Close(fd);
+      // TODO?
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::ERROR_OTHER));
+      return IPC_OK();
+    }
+    digest.Update(mozilla::Span<const uint8_t>(buffer, bytesRead));
+    bytesRead = PR_Read(fd, buffer, sizeof(buffer) / sizeof(uint8_t));
+  }
+  PR_Close(fd);
+  nsTArray<uint8_t> digestResults;
+  rv = digest.End(digestResults);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  nsCString digestString = mozilla::ToHexString(digestResults);
+
+  mozilla::dom::AutoEntryScript aes(
+      nsGlobalWindowInner::Cast(parent->GetOwnerElement()
+                                    ->OwnerDoc()
+                                    ->GetInnerWindow()),
+      "content analysis on clipboard copy");
+  nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+      new mozilla::contentanalysis::ContentAnalysisRequest(
+          nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath), true,
+          std::move(digestString), std::move(documentURIString)));
+  rv = contentAnalysis->AnalyzeContentRequest(
+      contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+  if (NS_SUCCEEDED(rv)) {
+    RefPtr<ContentAnalysisPromiseListener> listener =
+        new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
+    contentAnalysisPromise->AppendNativeHandler(listener);
+  } else {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+  }
+  return IPC_OK();
+}
+
 }  // namespace mozilla::contentanalysis
