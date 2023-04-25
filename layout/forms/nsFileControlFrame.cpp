@@ -9,6 +9,7 @@
 #include "nsGkAtoms.h"
 #include "nsCOMPtr.h"
 #include "mozilla/dom/BlobImpl.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/NodeInfo.h"
 #include "mozilla/dom/Element.h"
@@ -265,6 +266,8 @@ nsFileControlFrame::DnDListener::HandleEvent(Event* aEvent) {
           }
         }
       }
+      auto* doc = this->mFrame->mContent->OwnerDoc();
+      BrowserChild* browserChild = BrowserChild::GetFrom(doc->GetDocShell());
 
       // Entries API.
       if (blinkFileSystemEnabled) {
