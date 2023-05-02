@@ -1447,6 +1447,7 @@ nsClipboard::GetNativeClipboardData(nsITransferable* aTransferable,
     // do it the old manual way
     res = GetDataFromDataObject(nullptr, 0, mWindow, aTransferable);
   }
+  // TODO
   return res;
 }
 

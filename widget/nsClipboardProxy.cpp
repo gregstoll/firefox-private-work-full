@@ -21,6 +21,15 @@
 #include "nsXULAppAPI.h"
 #include "nsContentUtils.h"
 #include "PermissionMessageUtils.h"
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
+#include "nsGlobalWindowInner.h"
+#include "mozilla/Components.h"
+#include "mozilla/dom/AutoEntryScript.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsISupportsPrimitives.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -62,14 +71,42 @@ NS_IMETHODIMP nsClipboardProxy::AsyncSetData(
 }
 
 NS_IMETHODIMP
-nsClipboardProxy::GetData(nsITransferable* aTransferable,
-                          int32_t aWhichClipboard) {
+nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboard,
+    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
+                     mozilla::dom::BrowserParent*> aSource) {
   nsTArray<nsCString> types;
   aTransferable->FlavorsTransferableCanImport(types);
 
   IPCTransferableData transferable;
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
                                                  &transferable);
+  BrowserChild* browserChild = nullptr;
+  if (aSource.is<Document*>()) {
+    browserChild =
+        BrowserChild::GetFrom(aSource.as<Document*>()->GetDocShell());
+  }
+  std::atomic<bool> promiseDone = false;
+  // TODOTODO - insert content analysis here
+  ContentChild::GetSingleton()
+      ->SendDoClipboardContentAnalysis(browserChild, std::move(transferable))
+      ->Then(
+          //GetMainThreadSerialEventTarget(), __func__,
+          GetCurrentSerialEventTarget(), __func__,
+          /* resolve */
+          [&promiseDone](int32_t result) {
+            // TODO??
+            promiseDone = true;
+          },
+          /* reject */
+          [&promiseDone](mozilla::ipc::ResponseRejectReason aReason) {
+            //promise->Reject(NS_ERROR_FAILURE, __func__);
+            promiseDone = true;
+          });
+  while (!promiseDone) {
+    Sleep(250);
+  }
+
+  // TODO - this doesn't work, we std::move()'d out of transferable above
   return nsContentUtils::IPCTransferableDataToTransferable(
       transferable, false /* aAddDataFlavor */, aTransferable,
       false /* aFilterUnknownFlavors */);

@@ -22,7 +22,8 @@ class HeadlessClipboard final : public ClipboardSetDataHelper {
 
   // nsIClipboard
   NS_IMETHOD GetData(nsITransferable* aTransferable,
-                     int32_t aWhichClipboard) override;
+                     int32_t aWhichClipboard,
+                     mozilla::dom::ClipboardDocumentSource aSource) override;
   NS_IMETHOD EmptyClipboard(int32_t aWhichClipboard) override;
   NS_IMETHOD HasDataMatchingFlavors(const nsTArray<nsCString>& aFlavorList,
                                     int32_t aWhichClipboard,

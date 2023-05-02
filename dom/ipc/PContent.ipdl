@@ -1219,6 +1219,9 @@ parent:
     sync GetClipboard(nsCString[] aTypes, int32_t aWhichClipboard)
         returns (IPCTransferableData transferableData);
 
+    async DoClipboardContentAnalysis(nullable PBrowser aBrowser, IPCTransferableData data)
+        returns (int32_t nsIContentAnalysisResponseValue);
+
     // Returns a list of formats supported by the clipboard
     sync GetExternalClipboardFormats(int32_t aWhichClipboard, bool aPlainTextOnly) returns (nsCString[] aTypes);
 
