@@ -2320,7 +2320,8 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
     return NS_ERROR_FAILURE;
   }
   // Get the Data from the clipboard
-  rv = clipboard->GetData(transferable, aClipboardType);
+  // TODO
+  rv = clipboard->GetData(transferable, aClipboardType, AsVariant(mozilla::Nothing()));
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed");
     return rv;
@@ -2354,7 +2355,8 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
     NS_WARNING_ASSERTION(
         NS_SUCCEEDED(rvIgnored),
         "nsITransferable::AddDataFlavor(kHTMLContext) failed, but ignored");
-    rvIgnored = clipboard->GetData(contextTransferable, aClipboardType);
+    // TODO
+    rvIgnored = clipboard->GetData(contextTransferable, aClipboardType, AsVariant(mozilla::Nothing()));
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
                          "nsIClipboard::GetData() failed, but ignored");
     nsCOMPtr<nsISupports> contextDataObj;
@@ -2384,7 +2386,8 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
     NS_WARNING_ASSERTION(
         NS_SUCCEEDED(rvIgnored),
         "nsITransferable::AddDataFlavor(kHTMLInfo) failed, but ignored");
-    clipboard->GetData(infoTransferable, aClipboardType);
+    // TODO
+    clipboard->GetData(infoTransferable, aClipboardType, AsVariant(mozilla::Nothing()));
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
                          "nsIClipboard::GetData() failed, but ignored");
     nsCOMPtr<nsISupports> infoDataObj;
@@ -2529,7 +2532,8 @@ nsresult HTMLEditor::PasteNoFormattingAsAction(int32_t aSelectionType,
   }
 
   // Get the Data from the clipboard
-  rv = clipboard->GetData(transferable, aSelectionType);
+  // TODO
+  rv = clipboard->GetData(transferable, aSelectionType, AsVariant(mozilla::Nothing()));
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed");
     return rv;
@@ -2802,7 +2806,8 @@ nsresult HTMLEditor::PasteAsPlaintextQuotation(int32_t aSelectionType) {
       "nsITransferable::AddDataFlavor(kTextMime) failed, but ignored");
 
   // Get the Data from the clipboard
-  rvIgnored = clipboard->GetData(transferable, aSelectionType);
+  // TODO
+  rvIgnored = clipboard->GetData(transferable, aSelectionType, AsVariant(mozilla::Nothing()));
   NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
                        "nsIClipboard::GetData() failed, but ignored");
 

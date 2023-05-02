@@ -210,7 +210,7 @@ nsresult TextEditor::PasteAsAction(int32_t aClipboardType,
     return NS_OK;  // XXX Why?
   }
   // Get the Data from the clipboard.
-  rv = clipboard->GetData(transferable, aClipboardType);
+  rv = clipboard->GetData(transferable, aClipboardType, AsVariant(GetDocument()));
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed, but ignored");
     return NS_OK;  // XXX Why?

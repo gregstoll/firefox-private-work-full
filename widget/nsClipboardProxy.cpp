@@ -17,6 +17,15 @@
 #include "nsXULAppAPI.h"
 #include "nsContentUtils.h"
 #include "PermissionMessageUtils.h"
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
+#include "nsGlobalWindowInner.h"
+#include "mozilla/Components.h"
+#include "mozilla/dom/AutoEntryScript.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsISupportsPrimitives.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -57,17 +66,50 @@ nsClipboardProxy::SetData(nsITransferable* aTransferable,
 }
 
 NS_IMETHODIMP
-nsClipboardProxy::GetData(nsITransferable* aTransferable,
-                          int32_t aWhichClipboard) {
+nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboard,
+    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
+                     mozilla::dom::BrowserParent*> aSource) {
   nsTArray<nsCString> types;
   aTransferable->FlavorsTransferableCanImport(types);
 
   IPCDataTransfer dataTransfer;
+  BrowserChild* browserChild = nullptr;
+  if (aSource.is<Document*>()) {
+    browserChild =
+        BrowserChild::GetFrom(aSource.as<Document*>()->GetDocShell());
+  }
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
                                                  &dataTransfer);
-  return nsContentUtils::IPCTransferableToTransferable(
+  std::atomic<bool> promiseDone = false;
+  // TODOTODO - insert content analysis here
+  ContentChild::GetSingleton()
+      ->SendDoClipboardContentAnalysis(browserChild, std::move(dataTransfer))
+      ->Then(
+          //GetMainThreadSerialEventTarget(), __func__,
+          GetCurrentSerialEventTarget(), __func__,
+          /* resolve */
+          [&promiseDone](int32_t result) {
+            // TODO??
+            promiseDone = true;
+          },
+          /* reject */
+          [&promiseDone](mozilla::ipc::ResponseRejectReason aReason) {
+            //promise->Reject(NS_ERROR_FAILURE, __func__);
+            promiseDone = true;
+          });
+  while (!promiseDone) {
+    Sleep(250);
+  }
+
+  // TODO - this doesn't work, we std::move()'d out of dataTransfer above
+  nsresult rv = nsContentUtils::IPCTransferableToTransferable(
       dataTransfer, false /* aAddDataFlavor */, aTransferable,
       false /* aFilterUnknownFlavors */);
+  if (NS_FAILED(rv)) {
+    return rv;
+  }
+
+  return rv;
 }
 
 NS_IMETHODIMP
