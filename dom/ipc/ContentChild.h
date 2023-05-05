@@ -8,6 +8,7 @@
 #define mozilla_dom_ContentChild_h
 
 #include "mozilla/Atomics.h"
+#include "mozilla/contentanalysis/ContentAnalysisChild.h"
 #include "mozilla/dom/BlobImpl.h"
 #include "mozilla/dom/GetFilesHelper.h"
 #include "mozilla/dom/PContentChild.h"
@@ -119,6 +120,10 @@ class ContentChild final : public PContentChild,
   void InitGraphicsDeviceData(const ContentDeviceData& aData);
 
   static ContentChild* GetSingleton() { return sSingleton; }
+  // TODO - need to return RefPtr?
+  contentanalysis::ContentAnalysisChild* GetContentAnalysisChild() {
+    return mContentAnalysisChild.get();
+  }
 
   const AppInfo& GetAppInfo() { return mAppInfo; }
 
@@ -158,6 +163,9 @@ class ContentChild final : public PContentChild,
 
   mozilla::ipc::IPCResult RecvInitProcessHangMonitor(
       Endpoint<PProcessHangMonitorChild>&& aHangMonitor);
+
+  mozilla::ipc::IPCResult RecvCreateContentAnalysisChild(
+      Endpoint<PContentAnalysisChild>&& aContentAnalysisChild);
 
   mozilla::ipc::IPCResult RecvInitRendering(
       Endpoint<PCompositorManagerChild>&& aCompositor,
@@ -853,6 +861,7 @@ class ContentChild final : public PContentChild,
   RefPtr<ipc::SharedMap> mSharedData;
 
   RefPtr<ChildProfilerController> mProfilerController;
+  RefPtr<contentanalysis::ContentAnalysisChild> mContentAnalysisChild;
 
 #if defined(XP_MACOSX) && defined(MOZ_SANDBOX)
   nsCOMPtr<nsIFile> mProfileDir;

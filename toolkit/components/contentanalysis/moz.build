@@ -10,13 +10,23 @@ with Files("**"):
 UNIFIED_SOURCES += [
     "content_analysis/sdk/analysis.pb.cc",
     "ContentAnalysis.cpp",
+    "ContentAnalysisParent.cpp",
 ]
 
 UNIFIED_SOURCES += [
     "../../../third_party/content_analysis_sdk/browser/src/client_base.cc",
 ]
 
+IPDL_SOURCES += [
+    "PContentAnalysis.ipdl"
+]
+
 EXPORTS += ["ContentAnalysis.h"]
+
+EXPORTS.mozilla.contentanalysis += [
+    "ContentAnalysisChild.h",
+    "ContentAnalysisParent.h",
+]
 
 if CONFIG["OS_ARCH"] == "WINNT":
     UNIFIED_SOURCES += [

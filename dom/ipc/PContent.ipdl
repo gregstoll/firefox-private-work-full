@@ -44,6 +44,7 @@ include protocol PProfiler;
 include protocol PScriptCache;
 include protocol PSessionStorageObserver;
 include protocol PBenchmarkStorage;
+include protocol PContentAnalysis;
 include DOMTypes;
 include WindowGlobalTypes;
 include IPCBlob;
@@ -556,6 +557,7 @@ child:
                            uint32_t chromeFlags, ContentParentId cpId,
                            bool isForBrowser, bool isTopLevel);
 
+    async CreateContentAnalysisChild(Endpoint<PContentAnalysisChild> childEnd);
 both:
     // For parent->child, aBrowser must be non-null; aContext can
     // be null to indicate the browser's current root document, or non-null
@@ -1218,9 +1220,6 @@ parent:
     // first type that matches.
     sync GetClipboard(nsCString[] aTypes, int32_t aWhichClipboard)
         returns (IPCTransferableData transferableData);
-
-    async DoClipboardContentAnalysis(nullable PBrowser aBrowser, IPCTransferableData data)
-        returns (int32_t nsIContentAnalysisResponseValue);
 
     // Returns a list of formats supported by the clipboard
     sync GetExternalClipboardFormats(int32_t aWhichClipboard, bool aPlainTextOnly) returns (nsCString[] aTypes);

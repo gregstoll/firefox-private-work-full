@@ -1532,6 +1532,17 @@ mozilla::ipc::IPCResult ContentChild::RecvInitProcessHangMonitor(
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
+    Endpoint<PContentAnalysisChild>&& aContentAnalysisChild) {
+  // TODOTODO
+  // TODO do this on another thread
+  mContentAnalysisChild = new contentanalysis::ContentAnalysisChild();
+  if (!aContentAnalysisChild.Bind(mContentAnalysisChild)) {
+    // TODO handle error
+  }
+  return IPC_OK();
+}
+
 mozilla::ipc::IPCResult ContentChild::GetResultForRenderingInitFailure(
     base::ProcessId aOtherPid) {
   if (aOtherPid == base::GetCurrentProcId() || aOtherPid == OtherPid()) {
