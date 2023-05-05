@@ -80,25 +80,25 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
   }
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
                                                  &dataTransfer);
-  std::atomic<bool> promiseDone = false;
-  // TODOTODO - insert content analysis here
+   std::atomic<bool> promiseDone = false;
   ContentChild::GetSingleton()
-      ->SendDoClipboardContentAnalysis(browserChild, std::move(dataTransfer))
-      ->Then(
-          //GetMainThreadSerialEventTarget(), __func__,
-          GetCurrentSerialEventTarget(), __func__,
-          /* resolve */
-          [&promiseDone](int32_t result) {
-            // TODO??
-            promiseDone = true;
-          },
-          /* reject */
-          [&promiseDone](mozilla::ipc::ResponseRejectReason aReason) {
-            //promise->Reject(NS_ERROR_FAILURE, __func__);
-            promiseDone = true;
-          });
-  while (!promiseDone) {
-    Sleep(250);
+      ->GetContentAnalysisChild()
+  ->SendDoClipboardContentAnalysis(browserChild, std::move(dataTransfer))
+  ->Then(
+  //GetMainThreadSerialEventTarget(), __func__,
+   GetCurrentSerialEventTarget(), __func__,
+  /* resolve */
+  [&promiseDone](int32_t result) {
+  // TODO??
+   promiseDone = true;
+  },
+  /* reject */
+  [&promiseDone](mozilla::ipc::ResponseRejectReason aReason) {
+  //promise->Reject(NS_ERROR_FAILURE, __func__);
+   promiseDone = true;
+  });
+   while (!promiseDone) {
+   Sleep(250);
   }
 
   // TODO - this doesn't work, we std::move()'d out of dataTransfer above

@@ -1,0 +1,22 @@
+include protocol PBrowser;
+include DOMTypes;
+
+namespace mozilla {
+namespace contentanalysis {
+/**
+ * TODO update this
+ * The PContent protocol is a top-level protocol between the UI process
+ * and a content process. There is exactly one PContentParent/PContentChild pair
+ * for each content process.
+ */
+/* TODO?
+   [RefCounted]*/
+async protocol PContentAnalysis
+{
+parent:
+    async DoClipboardContentAnalysis(nullable PBrowser aBrowser, IPCDataTransfer data)
+        returns (int32_t nsIContentAnalysisResponseValue);
+};
+
+}
+}
