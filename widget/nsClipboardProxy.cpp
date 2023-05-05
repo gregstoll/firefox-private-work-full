@@ -13,6 +13,7 @@
 #include "mozilla/Maybe.h"
 #include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/Document.h"
+#include "mozilla/layers/LayersTypes.h"
 #include "mozilla/Unused.h"
 #include "nsArrayUtils.h"
 #include "nsISupportsPrimitives.h"
@@ -85,12 +86,17 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
     browserChild =
         BrowserChild::GetFrom(aSource.as<Document*>()->GetDocShell());
   }
+  layers::LayersId layersId;
+  if (browserChild) {
+    layersId = browserChild->GetLayersId();
+  }
+
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
                                                  &dataTransfer);
   std::atomic<bool> promiseDone = false;
   ContentChild::GetSingleton()
       ->GetContentAnalysisChild()
-      ->SendDoClipboardContentAnalysis(browserChild, std::move(dataTransfer))
+      ->SendDoClipboardContentAnalysis(layersId, std::move(dataTransfer))
       ->Then(
         //GetMainThreadSerialEventTarget(), __func__,
          GetCurrentSerialEventTarget(), __func__,

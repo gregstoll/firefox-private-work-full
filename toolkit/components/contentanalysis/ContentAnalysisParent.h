@@ -7,8 +7,10 @@
 #ifndef mozilla_ContentAnalysisParent_h
 #define mozilla_ContentAnalysisParent_h
 
+#include "nsIURI.h"
 #include "mozilla/contentanalysis/PContentAnalysisParent.h"
 #include "mozilla/dom/BrowserParent.h"
+#include "mozilla/layers/LayersTypes.h"
 
 namespace mozilla {
 namespace contentanalysis {
@@ -17,7 +19,7 @@ class ContentAnalysisParent final : public PContentAnalysisParent {
   ContentAnalysisParent() {}
 
   mozilla::ipc::IPCResult RecvDoClipboardContentAnalysis(
-      mozilla::dom::PBrowserParent* aBrowser, const IPCDataTransfer& aData,
+      const layers::LayersId& aLayersId, const IPCDataTransfer& aData,
       DoClipboardContentAnalysisResolver&& aResolver);
 
  private:

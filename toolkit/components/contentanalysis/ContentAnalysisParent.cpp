@@ -62,14 +62,12 @@ class ContentAnalysisPastePromiseListener
 NS_IMPL_ISUPPORTS0(ContentAnalysisPastePromiseListener)
 
 mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
-    mozilla::dom::PBrowserParent* aBrowser, const IPCDataTransfer& aData,
+    const layers::LayersId& layersId, const IPCDataTransfer& aData,
     DoClipboardContentAnalysisResolver&& aResolver) {
   nsresult rv;
-  mozilla::dom::BrowserParent* browser = nullptr;
-  if (aBrowser) {
-    browser = mozilla::dom::BrowserParent::GetFrom(aBrowser);
-  }
   mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+  mozilla::dom::BrowserParent* browser = nullptr;
+  browser = mozilla::dom::BrowserParent::GetBrowserParentFromLayersId(layersId);
   if (browser) {
     nsCOMPtr<nsIContentAnalysis> contentAnalysis =
         mozilla::components::nsIContentAnalysis::Service(&rv);
