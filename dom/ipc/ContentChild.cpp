@@ -664,11 +664,24 @@ ContentChild::~ContentChild() {
   profiler_remove_state_change_callback(reinterpret_cast<uintptr_t>(this));
   // TODO - yikes this is sketchy
   // but this needs to be disposed on the thread that created it
-  RefPtr<DestroyContentAnalysisRunnable> runnable =
+  // TODO - guard against NS_GetCurrentThread() returning null, which means
+  // NS_DispatchAndSpinEventLoopUntilComplete won't call forget() on the runnable,
+  // which means ~already_AddRefed<nsIRunnable>() will throw an exception when it leaves scope.
+  nsCOMPtr<nsIThread> current = NS_GetCurrentThread();
+  if (current) {
+    RefPtr<DestroyContentAnalysisRunnable> runnable =
       new DestroyContentAnalysisRunnable(mContentAnalysisChild);
-  NS_DispatchAndSpinEventLoopUntilComplete("ContentChild::~ContentChild"_ns,
-                                           mContentAnalysisThread,
-                                           runnable.forget());
+    NS_DispatchAndSpinEventLoopUntilComplete("ContentChild::~ContentChild"_ns,
+                                             mContentAnalysisThread,
+                                             runnable.forget());
+  }
+  else {
+    // TODO uhhhhhh this leaks, obviously
+    contentanalysis::ContentAnalysisChild* leakingChild = nullptr;
+    mContentAnalysisChild.forget(&leakingChild);
+    /* mContentAnalysisThread->Dispatch(runnable.forget(),
+                                     nsIEventTarget::DISPATCH_NORMAL);*/
+  }
 
 #ifndef NS_FREE_PERMANENT_DATA
   MOZ_CRASH("Content Child shouldn't be destroyed.");
