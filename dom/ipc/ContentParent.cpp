@@ -349,7 +349,6 @@
 #include "mozilla/dom/PromiseNativeHandler.h"
 #include "nsISupportsPrimitives.h"
 
-
 static NS_DEFINE_CID(kCClipboardCID, NS_CLIPBOARD_CID);
 
 using base::KillProcess;

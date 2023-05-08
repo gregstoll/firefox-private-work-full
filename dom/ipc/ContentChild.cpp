@@ -653,18 +653,20 @@ ContentChild::ContentChild()
 
 class DestroyContentAnalysisRunnable final : public Runnable {
  public:
-    DestroyContentAnalysisRunnable(RefPtr<contentanalysis::ContentAnalysisChild>& aChild) :
-    Runnable("DestroyContentAnalysisRunnable"), mChild(aChild) {}
+  DestroyContentAnalysisRunnable(
+      RefPtr<contentanalysis::ContentAnalysisChild>& aChild)
+      : Runnable("DestroyContentAnalysisRunnable"), mChild(aChild) {}
 
   NS_IMETHOD Run() override {
-    already_AddRefed<contentanalysis::ContentAnalysisChild> val = mChild.forget();
+    already_AddRefed<contentanalysis::ContentAnalysisChild> val =
+        mChild.forget();
     val.take()->Release();
     return NS_OK;
   }
 
-  private:
+ private:
   ~DestroyContentAnalysisRunnable() override = default;
-    RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
+  RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
 };
 
 ContentChild::~ContentChild() {
@@ -673,9 +675,9 @@ ContentChild::~ContentChild() {
   // but this needs to be disposed on the thread that created it
   RefPtr<DestroyContentAnalysisRunnable> runnable =
       new DestroyContentAnalysisRunnable(mContentAnalysisChild);
-  NS_DispatchAndSpinEventLoopUntilComplete(
-      "ContentChild::~ContentChild"_ns, mContentAnalysisThread,
-      runnable.forget());
+  NS_DispatchAndSpinEventLoopUntilComplete("ContentChild::~ContentChild"_ns,
+                                           mContentAnalysisThread,
+                                           runnable.forget());
 
 #ifndef NS_FREE_PERMANENT_DATA
   MOZ_CRASH("Content Child shouldn't be destroyed.");
@@ -1568,8 +1570,12 @@ mozilla::ipc::IPCResult ContentChild::RecvInitProcessHangMonitor(
 
 class CreateContentAnalysisRunnable final : public Runnable {
  public:
-    CreateContentAnalysisRunnable(RefPtr<contentanalysis::ContentAnalysisChild>& aChild, Endpoint<contentanalysis::PContentAnalysisChild>& aEndpoint) :
-    Runnable("CreateContentAnalysisRunnable"), mChild(aChild), mEndpoint(aEndpoint) {}
+  CreateContentAnalysisRunnable(
+      RefPtr<contentanalysis::ContentAnalysisChild>& aChild,
+      Endpoint<contentanalysis::PContentAnalysisChild>& aEndpoint)
+      : Runnable("CreateContentAnalysisRunnable"),
+        mChild(aChild),
+        mEndpoint(aEndpoint) {}
 
   NS_IMETHOD Run() override {
     mChild = new contentanalysis::ContentAnalysisChild();
@@ -1579,12 +1585,11 @@ class CreateContentAnalysisRunnable final : public Runnable {
     return NS_OK;
   }
 
-  private:
+ private:
   ~CreateContentAnalysisRunnable() override = default;
-    RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
-    Endpoint<contentanalysis::PContentAnalysisChild>& mEndpoint;
+  RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
+  Endpoint<contentanalysis::PContentAnalysisChild>& mEndpoint;
 };
-
 
 mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
     Endpoint<PContentAnalysisChild>&& aEndpoint) {

@@ -174,7 +174,8 @@ void DataTransferItem::FillInExternalData() {
       }
 
       // TODO
-      nsresult rv = clipboard->GetData(trans, mDataTransfer->ClipboardType(), AsVariant(mozilla::Nothing()));
+      nsresult rv = clipboard->GetData(trans, mDataTransfer->ClipboardType(),
+                                       AsVariant(mozilla::Nothing()));
       if (NS_WARN_IF(NS_FAILED(rv))) {
         return;
       }

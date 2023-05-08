@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include "ContentAnalysisParent.h"
 #include "ContentAnalysis.h"
 #include "nsIContentAnalysis.h"
@@ -29,11 +33,9 @@ class ContentAnalysisPastePromiseListener
       JS::Handle<JSObject*> handle =
           JS::Handle<JSObject*>::fromMarkedLocation(&obj);
       JS::RootedValue actionValue(aCx);
-      // JS_HasProperty(aCx, handle, "action", &found);
       if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
         if (actionValue.isNumber()) {
           double actionNumber = actionValue.toNumber();
-          // TODO - handle WARN case too
           mResolver(static_cast<int32_t>(actionNumber));
           return;
         }

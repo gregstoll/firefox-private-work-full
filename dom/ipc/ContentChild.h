@@ -124,7 +124,7 @@ class ContentChild final : public PContentChild,
   contentanalysis::ContentAnalysisChild* GetContentAnalysisChild() {
     return mContentAnalysisChild.get();
   }
-  
+
   RefPtr<nsIThread> GetContentAnalysisThread() {
     return mContentAnalysisThread;
   }
