@@ -27,6 +27,7 @@
 #include "mozilla/dom/CanonicalBrowsingContext.h"
 #include "mozilla/dom/PromiseNativeHandler.h"
 #include "nsISupportsPrimitives.h"
+#include "nsTransferable.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -118,21 +119,48 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
 
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
                                                  &dataTransfer);
-   std::atomic<bool> promiseDone = false;
-  RefPtr<SendDoClipboardContentAnalysisRunnable> runnable =
-      new SendDoClipboardContentAnalysisRunnable(promiseDone, layersId,
-                                                 std::move(dataTransfer));
-  auto contentAnalysisThread = ContentChild::GetSingleton()->GetContentAnalysisThread();
-  NS_DispatchAndSpinEventLoopUntilComplete(
-      "ContentChild::RecvCreateContentAnalysisChild"_ns,
-      contentAnalysisThread,
-      runnable.forget());
- while (!promiseDone) {
-   Sleep(250);
+  // Skip this possibly expensive stuff if content analysis isn't active
+  // TODO - can't do this here because can't connect to the pipe from the child process. Hmm.
+  nsresult rv;
+  /* nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      mozilla::components::nsIContentAnalysis::Service(&rv);
+  bool contentAnalysisIsActive = false;
+  if (NS_SUCCEEDED(rv)) {
+    // TODO - how to handle error?
+    rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+  }*/
+  bool contentAnalysisIsActive = true;
+  bool allowCopy = true;
+  if (contentAnalysisIsActive) {
+      std::atomic<bool> promiseDone = false;
+      // TODO - this is a very klunky way of making a copy of dataTransfer
+      // (since we need it below
+      nsCOMPtr<nsITransferable> dataTransferTemp(
+          do_CreateInstance("@mozilla.org/widget/transferable;1", &rv));
+      NS_ENSURE_SUCCESS(rv, rv);
+      dataTransferTemp->Init(nullptr);
+      // TODO error handling
+      rv = nsContentUtils::IPCTransferableToTransferable(dataTransfer, false,
+                                                    dataTransferTemp, false);
+      NS_ENSURE_SUCCESS(rv, rv);
+      // TODO - do I need to call AddDataFlavor() here?
+      IPCDataTransfer dataTransferCopy;
+      nsContentUtils::TransferableToIPCTransferable(
+          dataTransferTemp, &dataTransferCopy, true, nullptr);
+      RefPtr<SendDoClipboardContentAnalysisRunnable> runnable =
+          new SendDoClipboardContentAnalysisRunnable(promiseDone, layersId,
+                                                     std::move(dataTransferCopy));
+      auto contentAnalysisThread = ContentChild::GetSingleton()->GetContentAnalysisThread();
+      NS_DispatchAndSpinEventLoopUntilComplete(
+          "ContentChild::RecvCreateContentAnalysisChild"_ns,
+          contentAnalysisThread,
+          runnable.forget());
+      while (!promiseDone) {
+       Sleep(250);
+      }
   }
 
-  // TODO - this doesn't work, we std::move()'d out of dataTransfer above
-  nsresult rv = nsContentUtils::IPCTransferableToTransferable(
+  rv = nsContentUtils::IPCTransferableToTransferable(
       dataTransfer, false /* aAddDataFlavor */, aTransferable,
       false /* aFilterUnknownFlavors */);
   if (NS_FAILED(rv)) {
