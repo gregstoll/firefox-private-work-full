@@ -74,15 +74,11 @@ NS_IMETHODIMP nsClipboardProxy::AsyncSetData(
 
 class SendDoClipboardContentAnalysisRunnable final : public Runnable {
  public:
-  SendDoClipboardContentAnalysisRunnable(
-      std::atomic<bool>& promiseDone, layers::LayersId layersId,
-      IPCTransferableData&& dataTransfer) :
-    Runnable("SendDoClipboardContentAnalysisRunnable"),
-    mPromiseDone(promiseDone), mLayersId(layersId),
-    mDataTransfer(dataTransfer) {}
-
+  SendDoClipboardContentAnalysisRunnable(CondVar& promiseDone, std::atomic<int32_t>& promiseResult, layers::LayersId layersId, IPCTransferableData&& dataTransfer) :
+    Runnable("SendDoClipboardContentAnalysisRunnable"), mPromiseDone(promiseDone), mPromiseResult(promiseResult), mLayersId(layersId), mDataTransfer(dataTransfer) {}
   NS_IMETHOD Run() override {
-    std::atomic<bool>& localPromiseDone = mPromiseDone;
+    CondVar& localPromiseDone = mPromiseDone;
+    std::atomic<int32_t>& localPromiseResult = mPromiseResult;
     ContentChild::GetSingleton()
         ->GetContentAnalysisChild()
     ->SendDoClipboardContentAnalysis(mLayersId, std::move(mDataTransfer))
@@ -90,21 +86,25 @@ class SendDoClipboardContentAnalysisRunnable final : public Runnable {
     //GetMainThreadSerialEventTarget(), __func__,
      GetCurrentSerialEventTarget(), __func__,
     /* resolve */
-    [&localPromiseDone](int32_t result) {
+    [&localPromiseDone, &localPromiseResult](int32_t result) {
     // TODO??
-     localPromiseDone = true;
+              localPromiseResult = result;
+     localPromiseDone.Notify();
     },
     /* reject */
-    [&localPromiseDone](mozilla::ipc::ResponseRejectReason aReason) {
+    [&localPromiseDone, &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
     //promise->Reject(NS_ERROR_FAILURE, __func__);
-     localPromiseDone = true;
+      localPromiseResult =
+          nsIContentAnalysisResponse::ACTION_UNSPECIFIED;
+      localPromiseDone.Notify();
     });
     return NS_OK;
   }
 
  private:
   ~SendDoClipboardContentAnalysisRunnable() override = default;
-  std::atomic<bool>& mPromiseDone;
+  CondVar& mPromiseDone;
+  std::atomic<int32_t>& mPromiseResult;
   layers::LayersId mLayersId;
   IPCTransferableData& mDataTransfer;
 };
@@ -142,9 +142,17 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
     rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
   }*/
   bool contentAnalysisIsActive = true;
+  bool allowCopy = true;
   if (contentAnalysisIsActive) {
-      std::atomic<bool> promiseDone = false;
-      // TODO - this is a very klunky way of making a copy of transferable
+    // DLP: This breaks Clang's rudimentary thread safety check so we have disabled that.
+    Mutex promiseDoneMutex("nsClipboardProxy::GetData");
+    // TODO there may be a more idiomatic way to do this than to use a CondVar with an already-locked Mutex
+    promiseDoneMutex.Lock();
+    CondVar promiseDoneCondVar(promiseDoneMutex, "nsClipboardProxy::GetData");
+    std::atomic<int32_t> promiseResult;
+
+      
+      // TODO - this is a very klunky way of making a copy of dataTransfer
       // (since we need it below
       nsCOMPtr<nsITransferable> transferableTemp(
           do_CreateInstance("@mozilla.org/widget/transferable;1", &rv));
@@ -159,21 +167,31 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
       nsContentUtils::TransferableToIPCTransferableData(
           transferableTemp, &transferableCopy, true, nullptr);
       RefPtr<SendDoClipboardContentAnalysisRunnable> runnable =
-          new SendDoClipboardContentAnalysisRunnable(promiseDone, layersId,
+          new SendDoClipboardContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId,
                                                      std::move(transferableCopy));
       auto contentAnalysisThread = ContentChild::GetSingleton()->GetContentAnalysisThread();
+      // TODO - don't need to wait until complete
       NS_DispatchAndSpinEventLoopUntilComplete(
           "ContentChild::RecvCreateContentAnalysisChild"_ns,
           contentAnalysisThread,
           runnable.forget());
-      while (!promiseDone) {
-       Sleep(250);
+      promiseDoneCondVar.Wait();
+      // TODO - check these conditions
+      if (promiseResult == nsIContentAnalysisResponse::ACTION_UNSPECIFIED ||
+          promiseResult == nsIContentAnalysisResponse::BLOCK) {
+        allowCopy = false;
       }
+      promiseDoneMutex.Unlock();
   }
 
-  return nsContentUtils::IPCTransferableDataToTransferable(
+  if (!allowCopy) {
+      return rv;
+  }
+
+  rv = nsContentUtils::IPCTransferableDataToTransferable(
       transferable, false /* aAddDataFlavor */, aTransferable,
       false /* aFilterUnknownFlavors */);
+  return rv;
 }
 
 NS_IMETHODIMP

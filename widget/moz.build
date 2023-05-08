@@ -390,3 +390,8 @@ if CONFIG["MOZ_WIDGET_TOOLKIT"] == "gtk":
     CXXFLAGS += CONFIG["MOZ_GTK3_CFLAGS"]
 if CONFIG["MOZ_WAYLAND"]:
     CXXFLAGS += CONFIG["MOZ_WAYLAND_CFLAGS"]
+
+# TODO: This circumvents a bug in Clang's thread safety check in
+# nsClipboardProxy::GetData.  If we end up needing this, we should
+# use NO_THREAD_SAFETY_ANALYSIS on that method instead.
+CXXFLAGS += ["-Wno-thread-safety"]
