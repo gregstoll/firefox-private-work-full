@@ -74,30 +74,38 @@ NS_IMETHODIMP nsClipboardProxy::AsyncSetData(
 
 class SendDoClipboardContentAnalysisRunnable final : public Runnable {
  public:
-  SendDoClipboardContentAnalysisRunnable(CondVar& promiseDone, std::atomic<int32_t>& promiseResult, layers::LayersId layersId, IPCTransferableData&& dataTransfer) :
-    Runnable("SendDoClipboardContentAnalysisRunnable"), mPromiseDone(promiseDone), mPromiseResult(promiseResult), mLayersId(layersId), mDataTransfer(dataTransfer) {}
+  SendDoClipboardContentAnalysisRunnable(CondVar& promiseDone,
+                                         std::atomic<int32_t>& promiseResult,
+                                         layers::LayersId layersId,
+                                         IPCTransferableData&& dataTransfer)
+      : Runnable("SendDoClipboardContentAnalysisRunnable"),
+        mPromiseDone(promiseDone),
+        mPromiseResult(promiseResult),
+        mLayersId(layersId),
+        mDataTransfer(dataTransfer) {}
   NS_IMETHOD Run() override {
     CondVar& localPromiseDone = mPromiseDone;
     std::atomic<int32_t>& localPromiseResult = mPromiseResult;
     ContentChild::GetSingleton()
         ->GetContentAnalysisChild()
-    ->SendDoClipboardContentAnalysis(mLayersId, std::move(mDataTransfer))
-    ->Then(
-    //GetMainThreadSerialEventTarget(), __func__,
-     GetCurrentSerialEventTarget(), __func__,
-    /* resolve */
-    [&localPromiseDone, &localPromiseResult](int32_t result) {
-    // TODO??
+        ->SendDoClipboardContentAnalysis(mLayersId, std::move(mDataTransfer))
+        ->Then(
+            // GetMainThreadSerialEventTarget(), __func__,
+            GetCurrentSerialEventTarget(), __func__,
+            /* resolve */
+            [&localPromiseDone, &localPromiseResult](int32_t result) {
+              // TODO??
               localPromiseResult = result;
-     localPromiseDone.Notify();
-    },
-    /* reject */
-    [&localPromiseDone, &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
-    //promise->Reject(NS_ERROR_FAILURE, __func__);
-      localPromiseResult =
-          nsIContentAnalysisResponse::ACTION_UNSPECIFIED;
-      localPromiseDone.Notify();
-    });
+              localPromiseDone.Notify();
+            },
+            /* reject */
+            [&localPromiseDone,
+             &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
+              // promise->Reject(NS_ERROR_FAILURE, __func__);
+              localPromiseResult =
+                  nsIContentAnalysisResponse::ACTION_UNSPECIFIED;
+              localPromiseDone.Notify();
+            });
     return NS_OK;
   }
 
@@ -110,9 +118,11 @@ class SendDoClipboardContentAnalysisRunnable final : public Runnable {
 };
 
 NS_IMETHODIMP
-nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboard,
+nsClipboardProxy::GetData(
+    nsITransferable* aTransferable, int32_t aWhichClipboard,
     mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
-                     mozilla::dom::BrowserParent*> aSource) {
+                     mozilla::dom::BrowserParent*>
+        aSource) {
   nsTArray<nsCString> types;
   aTransferable->FlavorsTransferableCanImport(types);
 
@@ -132,7 +142,8 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
                                                  &transferable);
   // Skip this possibly expensive stuff if content analysis isn't active
-  // TODO - can't do this here because can't connect to the pipe from the child process. Hmm.
+  // TODO - can't do this here because can't connect to the pipe from the child
+  // process. Hmm.
   nsresult rv;
   /* nsCOMPtr<nsIContentAnalysis> contentAnalysis =
       mozilla::components::nsIContentAnalysis::Service(&rv);
@@ -146,46 +157,47 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
   if (contentAnalysisIsActive) {
     // DLP: This breaks Clang's rudimentary thread safety check so we have disabled that.
     Mutex promiseDoneMutex("nsClipboardProxy::GetData");
-    // TODO there may be a more idiomatic way to do this than to use a CondVar with an already-locked Mutex
+    // TODO there may be a more idiomatic way to do this than to use a CondVar
+    // with an already-locked Mutex
     promiseDoneMutex.Lock();
     CondVar promiseDoneCondVar(promiseDoneMutex, "nsClipboardProxy::GetData");
     std::atomic<int32_t> promiseResult;
 
-      
-      // TODO - this is a very klunky way of making a copy of dataTransfer
-      // (since we need it below
-      nsCOMPtr<nsITransferable> transferableTemp(
-          do_CreateInstance("@mozilla.org/widget/transferable;1", &rv));
-      NS_ENSURE_SUCCESS(rv, rv);
-      transferableTemp->Init(nullptr);
-      // TODO error handling
-      rv = nsContentUtils::IPCTransferableDataToTransferable(transferable, false,
-                                                    transferableTemp, false);
-      NS_ENSURE_SUCCESS(rv, rv);
-      // TODO - do I need to call AddDataFlavor() here?
-      IPCTransferableData transferableCopy;
-      nsContentUtils::TransferableToIPCTransferableData(
-          transferableTemp, &transferableCopy, true, nullptr);
-      RefPtr<SendDoClipboardContentAnalysisRunnable> runnable =
-          new SendDoClipboardContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId,
-                                                     std::move(transferableCopy));
-      auto contentAnalysisThread = ContentChild::GetSingleton()->GetContentAnalysisThread();
-      // TODO - don't need to wait until complete
-      NS_DispatchAndSpinEventLoopUntilComplete(
-          "ContentChild::RecvCreateContentAnalysisChild"_ns,
-          contentAnalysisThread,
-          runnable.forget());
-      promiseDoneCondVar.Wait();
-      // TODO - check these conditions
-      if (promiseResult == nsIContentAnalysisResponse::ACTION_UNSPECIFIED ||
-          promiseResult == nsIContentAnalysisResponse::BLOCK) {
-        allowCopy = false;
-      }
-      promiseDoneMutex.Unlock();
+    // TODO - this is a very klunky way of making a copy of dataTransfer
+    // (since we need it below
+    nsCOMPtr<nsITransferable> transferableTemp(
+        do_CreateInstance("@mozilla.org/widget/transferable;1", &rv));
+    NS_ENSURE_SUCCESS(rv, rv);
+    transferableTemp->Init(nullptr);
+    // TODO error handling
+    rv = nsContentUtils::IPCTransferableDataToTransferable(transferable, false,
+                                                  transferableTemp, false);
+    NS_ENSURE_SUCCESS(rv, rv);
+    // TODO - do I need to call AddDataFlavor() here?
+    IPCTransferableData transferableCopy;
+    nsContentUtils::TransferableToIPCTransferableData(
+        transferableTemp, &transferableCopy, true, nullptr);
+    RefPtr<SendDoClipboardContentAnalysisRunnable> runnable =
+        new SendDoClipboardContentAnalysisRunnable(promiseDoneCondVar,
+                                                   promiseResult, layersId,
+                                                   std::move(transferableCopy));
+    auto contentAnalysisThread =
+        ContentChild::GetSingleton()->GetContentAnalysisThread();
+    // TODO - don't need to wait until complete
+    NS_DispatchAndSpinEventLoopUntilComplete(
+        "ContentChild::RecvCreateContentAnalysisChild"_ns,
+        contentAnalysisThread, runnable.forget());
+    promiseDoneCondVar.Wait();
+    // TODO - check these conditions
+    if (promiseResult == nsIContentAnalysisResponse::ACTION_UNSPECIFIED ||
+        promiseResult == nsIContentAnalysisResponse::BLOCK) {
+      allowCopy = false;
+    }
+    promiseDoneMutex.Unlock();
   }
 
   if (!allowCopy) {
-      return rv;
+    return rv;
   }
 
   rv = nsContentUtils::IPCTransferableDataToTransferable(

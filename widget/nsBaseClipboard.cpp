@@ -209,10 +209,11 @@ NS_IMETHODIMP nsBaseClipboard::SetData(
  * Gets the transferable object
  *
  */
-NS_IMETHODIMP nsBaseClipboard::GetData(nsITransferable* aTransferable,
-                                       int32_t aWhichClipboard,
+NS_IMETHODIMP nsBaseClipboard::GetData(
+    nsITransferable* aTransferable, int32_t aWhichClipboard,
     mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
-                     mozilla::dom::BrowserParent*> aSource) {
+                     mozilla::dom::BrowserParent*>
+        aSource) {
   NS_ASSERTION(aTransferable, "clipboard given a null transferable");
 
   CLIPBOARD_LOG("%s", __FUNCTION__);
@@ -233,7 +234,8 @@ NS_IMETHODIMP nsBaseClipboard::GetData(nsITransferable* aTransferable,
 RefPtr<GenericPromise> nsBaseClipboard::AsyncGetData(
     nsITransferable* aTransferable, int32_t aWhichClipboard) {
   // TODO
-  nsresult rv = GetData(aTransferable, aWhichClipboard, AsVariant(mozilla::Nothing()));
+  nsresult rv =
+      GetData(aTransferable, aWhichClipboard, AsVariant(mozilla::Nothing()));
   if (NS_FAILED(rv)) {
     return GenericPromise::CreateAndReject(rv, __func__);
   }
