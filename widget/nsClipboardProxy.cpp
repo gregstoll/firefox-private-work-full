@@ -175,10 +175,8 @@ nsClipboardProxy::GetData(
                                                    std::move(dataTransferCopy));
     auto contentAnalysisThread =
         ContentChild::GetSingleton()->GetContentAnalysisThread();
-    // TODO - don't need to wait until complete
-    NS_DispatchAndSpinEventLoopUntilComplete(
-        "ContentChild::RecvCreateContentAnalysisChild"_ns,
-        contentAnalysisThread, runnable.forget());
+    contentAnalysisThread->Dispatch(runnable.forget(),
+                                    nsIEventTarget::DISPATCH_NORMAL);
     promiseDoneCondVar.Wait();
     // TODO - check these conditions
     if (promiseResult == nsIContentAnalysisResponse::ACTION_UNSPECIFIED ||
