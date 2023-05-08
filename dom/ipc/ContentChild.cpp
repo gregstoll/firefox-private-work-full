@@ -642,8 +642,31 @@ ContentChild::ContentChild()
                            */
 #endif
 
+class DestroyContentAnalysisRunnable final : public Runnable {
+ public:
+    DestroyContentAnalysisRunnable(RefPtr<contentanalysis::ContentAnalysisChild>& aChild) :
+    Runnable("DestroyContentAnalysisRunnable"), mChild(aChild) {}
+
+  NS_IMETHOD Run() override {
+    already_AddRefed<contentanalysis::ContentAnalysisChild> val = mChild.forget();
+    val.take()->Release();
+    return NS_OK;
+  }
+
+  private:
+  ~DestroyContentAnalysisRunnable() override = default;
+    RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
+};
+
 ContentChild::~ContentChild() {
   profiler_remove_state_change_callback(reinterpret_cast<uintptr_t>(this));
+  // TODO - yikes this is sketchy
+  // but this needs to be disposed on the thread that created it
+  RefPtr<DestroyContentAnalysisRunnable> runnable =
+      new DestroyContentAnalysisRunnable(mContentAnalysisChild);
+  NS_DispatchAndSpinEventLoopUntilComplete(
+      "ContentChild::~ContentChild"_ns, mContentAnalysisThread,
+      runnable.forget());
 
 #ifndef NS_FREE_PERMANENT_DATA
   MOZ_CRASH("Content Child shouldn't be destroyed.");
@@ -1532,14 +1555,41 @@ mozilla::ipc::IPCResult ContentChild::RecvInitProcessHangMonitor(
   return IPC_OK();
 }
 
+class CreateContentAnalysisRunnable final : public Runnable {
+ public:
+    CreateContentAnalysisRunnable(RefPtr<contentanalysis::ContentAnalysisChild>& aChild, Endpoint<contentanalysis::PContentAnalysisChild>& aEndpoint) :
+    Runnable("CreateContentAnalysisRunnable"), mChild(aChild), mEndpoint(aEndpoint) {}
+
+  NS_IMETHOD Run() override {
+    mChild = new contentanalysis::ContentAnalysisChild();
+    if (!mEndpoint.Bind(mChild)) {
+      // TODO handle error
+    }
+    return NS_OK;
+  }
+
+  private:
+  ~CreateContentAnalysisRunnable() override = default;
+    RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
+    Endpoint<contentanalysis::PContentAnalysisChild>& mEndpoint;
+};
+
+
 mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
-    Endpoint<PContentAnalysisChild>&& aContentAnalysisChild) {
+    Endpoint<PContentAnalysisChild>&& aEndpoint) {
   // TODOTODO
   // TODO do this on another thread
-  mContentAnalysisChild = new contentanalysis::ContentAnalysisChild();
-  if (!aContentAnalysisChild.Bind(mContentAnalysisChild)) {
+  nsresult rv = NS_NewNamedThread("ContentAnalysis",
+                                  getter_AddRefs(mContentAnalysisThread));
+  if (NS_WARN_IF(NS_FAILED(rv))) {
     // TODO handle error
   }
+
+  RefPtr<CreateContentAnalysisRunnable> runnable =
+      new CreateContentAnalysisRunnable(mContentAnalysisChild, aEndpoint);
+  NS_DispatchAndSpinEventLoopUntilComplete(
+      "ContentChild::RecvCreateContentAnalysisChild"_ns, mContentAnalysisThread,
+      runnable.forget());
   return IPC_OK();
 }
 

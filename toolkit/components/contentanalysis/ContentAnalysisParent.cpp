@@ -62,7 +62,7 @@ class ContentAnalysisPastePromiseListener
 NS_IMPL_ISUPPORTS0(ContentAnalysisPastePromiseListener)
 
 mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
-    const layers::LayersId& layersId, const IPCDataTransfer& aData,
+    const layers::LayersId& layersId, const IPCTransferableData& aData,
     DoClipboardContentAnalysisResolver&& aResolver) {
   nsresult rv;
   mozilla::dom::Promise* contentAnalysisPromise = nullptr;
@@ -102,7 +102,7 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
       NS_ENSURE_SUCCESS(rv, IPC_OK());
       trans->Init(nullptr);
 
-      rv = nsContentUtils::IPCTransferableToTransferable(aData, false, trans,
+      rv = nsContentUtils::IPCTransferableDataToTransferable(aData, false, trans,
                                                          false);
       if (NS_FAILED(rv)) {
         return IPC_OK();

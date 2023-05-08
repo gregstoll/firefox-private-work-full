@@ -124,6 +124,10 @@ class ContentChild final : public PContentChild,
   contentanalysis::ContentAnalysisChild* GetContentAnalysisChild() {
     return mContentAnalysisChild.get();
   }
+  
+  RefPtr<nsIThread> GetContentAnalysisThread() {
+    return mContentAnalysisThread;
+  }
 
   const AppInfo& GetAppInfo() { return mAppInfo; }
 
@@ -862,6 +866,7 @@ class ContentChild final : public PContentChild,
 
   RefPtr<ChildProfilerController> mProfilerController;
   RefPtr<contentanalysis::ContentAnalysisChild> mContentAnalysisChild;
+  RefPtr<nsIThread> mContentAnalysisThread;
 
 #if defined(XP_MACOSX) && defined(MOZ_SANDBOX)
   nsCOMPtr<nsIFile> mProfileDir;

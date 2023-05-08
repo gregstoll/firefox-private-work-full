@@ -71,6 +71,43 @@ NS_IMETHODIMP nsClipboardProxy::AsyncSetData(
   return NS_OK;
 }
 
+class SendDoClipboardContentAnalysisRunnable final : public Runnable {
+ public:
+  SendDoClipboardContentAnalysisRunnable(
+      std::atomic<bool>& promiseDone, layers::LayersId layersId,
+      IPCTransferableData&& dataTransfer) :
+    Runnable("SendDoClipboardContentAnalysisRunnable"),
+    mPromiseDone(promiseDone), mLayersId(layersId),
+    mDataTransfer(dataTransfer) {}
+
+  NS_IMETHOD Run() override {
+    std::atomic<bool>& localPromiseDone = mPromiseDone;
+    ContentChild::GetSingleton()
+        ->GetContentAnalysisChild()
+    ->SendDoClipboardContentAnalysis(mLayersId, std::move(mDataTransfer))
+    ->Then(
+    //GetMainThreadSerialEventTarget(), __func__,
+     GetCurrentSerialEventTarget(), __func__,
+    /* resolve */
+    [&localPromiseDone](int32_t result) {
+    // TODO??
+     localPromiseDone = true;
+    },
+    /* reject */
+    [&localPromiseDone](mozilla::ipc::ResponseRejectReason aReason) {
+    //promise->Reject(NS_ERROR_FAILURE, __func__);
+     localPromiseDone = true;
+    });
+    return NS_OK;
+  }
+
+ private:
+  ~SendDoClipboardContentAnalysisRunnable() override = default;
+  std::atomic<bool>& mPromiseDone;
+  layers::LayersId mLayersId;
+  IPCTransferableData& mDataTransfer;
+};
+
 NS_IMETHODIMP
 nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboard,
     mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
@@ -92,24 +129,16 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable, int32_t aWhichClipboar
   }
 
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
-                                                 &dataTransfer);
+                                                 &transferable);
   std::atomic<bool> promiseDone = false;
-  ContentChild::GetSingleton()
-      ->GetContentAnalysisChild()
-      ->SendDoClipboardContentAnalysis(layersId, std::move(dataTransfer))
-      ->Then(
-        //GetMainThreadSerialEventTarget(), __func__,
-         GetCurrentSerialEventTarget(), __func__,
-        /* resolve */
-        [&promiseDone](int32_t result) {
-          // TODO??
-         promiseDone = true;
-        },
-        /* reject */
-        [&promiseDone](mozilla::ipc::ResponseRejectReason aReason) {
-          //promise->Reject(NS_ERROR_FAILURE, __func__);
-         promiseDone = true;
-        });
+  RefPtr<SendDoClipboardContentAnalysisRunnable> runnable =
+      new SendDoClipboardContentAnalysisRunnable(promiseDone, layersId,
+                                                 std::move(transferable));
+  auto contentAnalysisThread = ContentChild::GetSingleton()->GetContentAnalysisThread();
+  NS_DispatchAndSpinEventLoopUntilComplete(
+      "ContentChild::RecvCreateContentAnalysisChild"_ns,
+      contentAnalysisThread,
+      runnable.forget());
   while (!promiseDone) {
    Sleep(250);
   }

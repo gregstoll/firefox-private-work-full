@@ -1,5 +1,7 @@
+include "mozilla/layers/LayersMessageUtils.h";
+
 include protocol PBrowser;
-include DOMTypes;
+include IPCTransferable;
 
 using mozilla::layers::LayersId from "mozilla/layers/LayersTypes.h";
 
@@ -16,7 +18,7 @@ namespace contentanalysis {
 async protocol PContentAnalysis
 {
 parent:
-    async DoClipboardContentAnalysis(LayersId layersId, IPCDataTransfer data)
+    async DoClipboardContentAnalysis(LayersId layersId, IPCTransferableData data)
         returns (int32_t nsIContentAnalysisResponseValue);
 };
 

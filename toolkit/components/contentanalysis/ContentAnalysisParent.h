@@ -19,7 +19,7 @@ class ContentAnalysisParent final : public PContentAnalysisParent {
   ContentAnalysisParent() {}
 
   mozilla::ipc::IPCResult RecvDoClipboardContentAnalysis(
-      const layers::LayersId& aLayersId, const IPCDataTransfer& aData,
+      const layers::LayersId& aLayersId, const IPCTransferableData& aData,
       DoClipboardContentAnalysisResolver&& aResolver);
 
  private:
