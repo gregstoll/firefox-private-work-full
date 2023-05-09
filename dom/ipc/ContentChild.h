@@ -120,9 +120,9 @@ class ContentChild final : public PContentChild,
   void InitGraphicsDeviceData(const ContentDeviceData& aData);
 
   static ContentChild* GetSingleton() { return sSingleton; }
-  // TODO - need to return RefPtr?
-  contentanalysis::ContentAnalysisChild* GetContentAnalysisChild() {
-    return mContentAnalysisChild.get();
+
+  RefPtr<contentanalysis::ContentAnalysisChild> GetContentAnalysisChild() {
+    return mContentAnalysisChild;
   }
 
   RefPtr<nsISerialEventTarget> GetContentAnalysisEventTarget() {

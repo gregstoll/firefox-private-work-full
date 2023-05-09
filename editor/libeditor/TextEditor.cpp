@@ -575,8 +575,7 @@ nsresult TextEditor::HandlePasteAsQuotation(
   }
 
   // Get the Data from the clipboard
-  // TODO
-  clipboard->GetData(trans, aClipboardType, AsVariant(mozilla::Nothing()));
+  clipboard->GetData(trans, aClipboardType, AsVariant(GetDocument()));
 
   // Now we ask the transferable for the data
   // it still owns the data, we just have a pointer to it.

@@ -1713,21 +1713,15 @@ void ContentParent::Init() {
       GeckoMediaPluginServiceParent::GetSingleton());
   gmps->UpdateContentProcessGMPCapabilities(this);
 
-  // TODOTODO - construct here
   {
     Endpoint<contentanalysis::PContentAnalysisParent> parentEnd;
     Endpoint<contentanalysis::PContentAnalysisChild> childEnd;
-    if (NS_WARN_IF(NS_FAILED(contentanalysis::PContentAnalysis::CreateEndpoints(
-            base::GetCurrentProcId(), OtherPid(), &parentEnd, &childEnd)))) {
-      // TODO handle failure
-    }
+    Unused << NS_WARN_IF(
+        NS_FAILED(contentanalysis::PContentAnalysis::CreateEndpoints(
+            base::GetCurrentProcId(), OtherPid(), &parentEnd, &childEnd)));
     mContentAnalysisParent = new contentanalysis::ContentAnalysisParent();
-    if (!parentEnd.Bind(mContentAnalysisParent)) {
-      // TODO handle failure
-    }
-    if (!SendCreateContentAnalysisChild(std::move(childEnd))) {
-      // TODO handle failure
-    }
+    Unused << NS_WARN_IF(!parentEnd.Bind(mContentAnalysisParent));
+    Unused << NS_WARN_IF(!SendCreateContentAnalysisChild(std::move(childEnd)));
   }
 
   // Flush any pref updates that happened during launch and weren't
@@ -3543,7 +3537,6 @@ mozilla::ipc::IPCResult ContentParent::RecvGetClipboard(
 
   // Get data from clipboard
   nsCOMPtr<nsITransferable> trans = result.unwrap();
-  // TODO? this might be done
   clipboard->GetData(trans, aWhichClipboard, AsVariant(mozilla::Nothing()));
 
   nsContentUtils::TransferableToIPCTransferableData(

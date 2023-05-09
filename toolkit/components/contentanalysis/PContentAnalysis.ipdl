@@ -12,8 +12,6 @@ namespace contentanalysis {
  * and a content process. There is exactly one PContentAnalysisParent/PContentAnalysisChild pair
  * for each content process.
  */
-/* TODO?
-   [RefCounted]*/
 async protocol PContentAnalysis
 {
 parent:
