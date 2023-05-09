@@ -665,21 +665,21 @@ ContentChild::~ContentChild() {
   // TODO - yikes this is sketchy
   // but this needs to be disposed on the thread that created it
   // TODO - guard against NS_GetCurrentThread() returning null, which means
-  // NS_DispatchAndSpinEventLoopUntilComplete won't call forget() on the runnable,
-  // which means ~already_AddRefed<nsIRunnable>() will throw an exception when it leaves scope.
+  // NS_DispatchAndSpinEventLoopUntilComplete won't call forget() on the
+  // runnable, which means ~already_AddRefed<nsIRunnable>() will throw an
+  // exception when it leaves scope.
   nsCOMPtr<nsIThread> current = NS_GetCurrentThread();
   if (current) {
     RefPtr<DestroyContentAnalysisRunnable> runnable =
-      new DestroyContentAnalysisRunnable(mContentAnalysisChild);
+        new DestroyContentAnalysisRunnable(mContentAnalysisChild);
     NS_DispatchAndSpinEventLoopUntilComplete("ContentChild::~ContentChild"_ns,
-                                             mContentAnalysisThread,
+                                             mContentAnalysisEventTarget,
                                              runnable.forget());
-  }
-  else {
+  } else {
     // TODO uhhhhhh this leaks, obviously
     contentanalysis::ContentAnalysisChild* leakingChild = nullptr;
     mContentAnalysisChild.forget(&leakingChild);
-    /* mContentAnalysisThread->Dispatch(runnable.forget(),
+    /* mContentAnalysisEventTarget->Dispatch(runnable.forget(),
                                      nsIEventTarget::DISPATCH_NORMAL);*/
   }
 
@@ -1595,10 +1595,8 @@ class CreateContentAnalysisRunnable final : public Runnable {
 
 mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
     Endpoint<PContentAnalysisChild>&& aEndpoint) {
-  // TODOTODO
-  // TODO do this on another thread
-  nsresult rv = NS_NewNamedThread("ContentAnalysis",
-                                  getter_AddRefs(mContentAnalysisThread));
+  nsresult rv = NS_CreateBackgroundTaskQueue(
+      "ContentAnalysis", mContentAnalysisEventTarget.StartAssignment());
   if (NS_WARN_IF(NS_FAILED(rv))) {
     // TODO handle error
   }
@@ -1606,8 +1604,8 @@ mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
   RefPtr<CreateContentAnalysisRunnable> runnable =
       new CreateContentAnalysisRunnable(mContentAnalysisChild, aEndpoint);
   NS_DispatchAndSpinEventLoopUntilComplete(
-      "ContentChild::RecvCreateContentAnalysisChild"_ns, mContentAnalysisThread,
-      runnable.forget());
+      "ContentChild::RecvCreateContentAnalysisChild"_ns,
+      mContentAnalysisEventTarget, runnable.forget());
   return IPC_OK();
 }
 
