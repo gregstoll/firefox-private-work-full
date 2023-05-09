@@ -644,45 +644,27 @@ ContentChild::ContentChild()
 
 class DestroyContentAnalysisRunnable final : public Runnable {
  public:
-  DestroyContentAnalysisRunnable(
-      RefPtr<contentanalysis::ContentAnalysisChild>& aChild)
+  DestroyContentAnalysisRunnable(contentanalysis::ContentAnalysisChild* aChild)
       : Runnable("DestroyContentAnalysisRunnable"), mChild(aChild) {}
 
   NS_IMETHOD Run() override {
-    already_AddRefed<contentanalysis::ContentAnalysisChild> val =
-        mChild.forget();
-    val.take()->Release();
+    mChild->Release();
     return NS_OK;
   }
 
  private:
   ~DestroyContentAnalysisRunnable() override = default;
-  RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
+  contentanalysis::ContentAnalysisChild* mChild;
 };
 
 ContentChild::~ContentChild() {
   profiler_remove_state_change_callback(reinterpret_cast<uintptr_t>(this));
-  // TODO - yikes this is sketchy
-  // but this needs to be disposed on the thread that created it
-  // TODO - guard against NS_GetCurrentThread() returning null, which means
-  // NS_DispatchAndSpinEventLoopUntilComplete won't call forget() on the
-  // runnable, which means ~already_AddRefed<nsIRunnable>() will throw an
-  // exception when it leaves scope.
-  nsCOMPtr<nsIThread> current = NS_GetCurrentThread();
-  if (current) {
-    RefPtr<DestroyContentAnalysisRunnable> runnable =
-        new DestroyContentAnalysisRunnable(mContentAnalysisChild);
-    NS_DispatchAndSpinEventLoopUntilComplete("ContentChild::~ContentChild"_ns,
-                                             mContentAnalysisEventTarget,
-                                             runnable.forget());
-  } else {
-    // TODO uhhhhhh this leaks, obviously
-    contentanalysis::ContentAnalysisChild* leakingChild = nullptr;
-    mContentAnalysisChild.forget(&leakingChild);
-    /* mContentAnalysisEventTarget->Dispatch(runnable.forget(),
-                                     nsIEventTarget::DISPATCH_NORMAL);*/
-  }
-
+  contentanalysis::ContentAnalysisChild* contentAnalysisChild = nullptr;
+  mContentAnalysisChild.forget(&contentAnalysisChild);
+  RefPtr<DestroyContentAnalysisRunnable> runnable =
+      new DestroyContentAnalysisRunnable(contentAnalysisChild);
+  mContentAnalysisEventTarget->Dispatch(runnable.forget(),
+                                        nsIEventTarget::DISPATCH_NORMAL);
 #ifndef NS_FREE_PERMANENT_DATA
   MOZ_CRASH("Content Child shouldn't be destroyed.");
 #endif
