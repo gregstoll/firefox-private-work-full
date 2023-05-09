@@ -29,7 +29,6 @@ class ContentAnalysisPastePromiseListener
                                 mozilla::ErrorResult& aRv) override {
     if (aValue.isObject()) {
       auto* obj = aValue.toObjectOrNull();
-      // TODO is this handle thing ok?
       JS::Handle<JSObject*> handle =
           JS::Handle<JSObject*>::fromMarkedLocation(&obj);
       JS::RootedValue actionValue(aCx);
@@ -124,7 +123,6 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
       }
 
       nsCString emptyDigest;
-      // TODO - is BULK_DATA_ENTRY right?
       nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
           new mozilla::contentanalysis::ContentAnalysisRequest(
               nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text),
@@ -136,21 +134,6 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
         RefPtr<ContentAnalysisPastePromiseListener> listener =
             new ContentAnalysisPastePromiseListener(aResolver);
         contentAnalysisPromise->AppendNativeHandler(listener);
-
-        // TODO - is this ok?
-        // Just use the global of the Promise itself as the callee global.
-        // JS::Rooted<JSObject*> global(aes.cx(),
-        // contentAnalysisPromise->PromiseObj()); global =
-        // JS::GetNonCCWObjectGlobal(global); contentAnalysisPromise->Then(
-        //  aes.cx(), global,
-        //  /* GetMainThreadSerialEventTarget(), __func__,*/
-        //  /* resolve */
-        //  [aResolver](const int32_t result) { aResolver(result); },
-        //  /* reject */
-        //  // TODO - is this OK?
-        //  [aResolver](nsresult rv) {
-        //  aResolver(static_cast<int32_t>(nsIContentAnalysisResponse::ACTION_UNSPECIFIED));
-        //  });
       }
     }
   }
