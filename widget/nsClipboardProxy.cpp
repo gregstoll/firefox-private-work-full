@@ -170,10 +170,10 @@ nsClipboardProxy::GetData(
         new SendDoClipboardContentAnalysisRunnable(promiseDoneCondVar,
                                                    promiseResult, layersId,
                                                    std::move(dataTransferCopy));
-    auto contentAnalysisThread =
-        ContentChild::GetSingleton()->GetContentAnalysisThread();
-    contentAnalysisThread->Dispatch(runnable.forget(),
-                                    nsIEventTarget::DISPATCH_NORMAL);
+    auto contentAnalysisEventTarget =
+        ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
+    contentAnalysisEventTarget->Dispatch(runnable.forget(),
+                                         nsIEventTarget::DISPATCH_NORMAL);
     promiseDoneCondVar.Wait();
     // TODO - check these conditions
     if (promiseResult == nsIContentAnalysisResponse::ACTION_UNSPECIFIED ||
