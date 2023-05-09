@@ -90,18 +90,15 @@ class SendDoClipboardContentAnalysisRunnable final : public Runnable {
         ->GetContentAnalysisChild()
         ->SendDoClipboardContentAnalysis(mLayersId, std::move(mDataTransfer))
         ->Then(
-            // GetMainThreadSerialEventTarget(), __func__,
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
             [&localPromiseDone, &localPromiseResult](int32_t result) {
-              // TODO??
               localPromiseResult = result;
               localPromiseDone.Notify();
             },
             /* reject */
             [&localPromiseDone,
              &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
-              // promise->Reject(NS_ERROR_FAILURE, __func__);
               localPromiseResult =
                   nsIContentAnalysisResponse::ACTION_UNSPECIFIED;
               localPromiseDone.Notify();
@@ -117,12 +114,14 @@ class SendDoClipboardContentAnalysisRunnable final : public Runnable {
   IPCTransferableData& mDataTransfer;
 };
 
+// Turn off thread safety analysis because of the way we acquire a mutex
+// only if content analysis might be active
 NS_IMETHODIMP
 nsClipboardProxy::GetData(
     nsITransferable* aTransferable, int32_t aWhichClipboard,
     mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
                      mozilla::dom::BrowserParent*>
-        aSource) {
+        aSource) MOZ_NO_THREAD_SAFETY_ANALYSIS {
   nsTArray<nsCString> types;
   aTransferable->FlavorsTransferableCanImport(types);
 
@@ -141,21 +140,22 @@ nsClipboardProxy::GetData(
 
   ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
                                                  &transferable);
-  // Skip this possibly expensive stuff if content analysis isn't active
-  // TODO - can't do this here because can't connect to the pipe from the child
-  // process. Hmm.
+  // Skip this possibly expensive stuff if content analysis is guaranteed to
+  // not be active. Note that checking whether it is active for sure requires
+  // being in the parent process since it has to be able to check the pipe.
+  // But this will help us avoid calling into the parent process almost all
+  // of the time.
   nsresult rv;
-  /* nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
       mozilla::components::nsIContentAnalysis::Service(&rv);
-  bool contentAnalysisIsActive = false;
-  if (NS_SUCCEEDED(rv)) {
-    // TODO - how to handle error?
-    rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
-  }*/
-  bool contentAnalysisIsActive = true;
+  bool contentAnalysisMightBeActive = false;
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = contentAnalysis->GetMightBeActive(&contentAnalysisMightBeActive);
+  NS_ENSURE_SUCCESS(rv, rv);
   bool allowCopy = true;
-  if (contentAnalysisIsActive) {
-    // DLP: This breaks Clang's rudimentary thread safety check so we have disabled that.
+  if (contentAnalysisMightBeActive) {
+    // DLP: This breaks Clang's rudimentary thread safety check so we have
+    // disabled that in moz.build.
     Mutex promiseDoneMutex("nsClipboardProxy::GetData");
     // TODO there may be a more idiomatic way to do this than to use a CondVar
     // with an already-locked Mutex
@@ -164,16 +164,14 @@ nsClipboardProxy::GetData(
     std::atomic<int32_t> promiseResult;
 
     // TODO - this is a very klunky way of making a copy of dataTransfer
-    // (since we need it below
+    // (since we need it below)
     nsCOMPtr<nsITransferable> transferableTemp(
         do_CreateInstance("@mozilla.org/widget/transferable;1", &rv));
     NS_ENSURE_SUCCESS(rv, rv);
     transferableTemp->Init(nullptr);
-    // TODO error handling
     rv = nsContentUtils::IPCTransferableDataToTransferable(transferable, false,
-                                                  transferableTemp, false);
+                                                           transferableTemp, false);
     NS_ENSURE_SUCCESS(rv, rv);
-    // TODO - do I need to call AddDataFlavor() here?
     IPCTransferableData transferableCopy;
     nsContentUtils::TransferableToIPCTransferableData(
         transferableTemp, &transferableCopy, true, nullptr);

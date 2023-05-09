@@ -8,9 +8,8 @@ using mozilla::layers::LayersId from "mozilla/layers/LayersTypes.h";
 namespace mozilla {
 namespace contentanalysis {
 /**
- * TODO update this
- * The PContent protocol is a top-level protocol between the UI process
- * and a content process. There is exactly one PContentParent/PContentChild pair
+ * The PContentAnalysis protocol is a top-level protocol between the UI process
+ * and a content process. There is exactly one PContentAnalysisParent/PContentAnalysisChild pair
  * for each content process.
  */
 /* TODO?

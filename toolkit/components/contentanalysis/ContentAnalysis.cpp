@@ -471,6 +471,12 @@ ContentAnalysis::GetIsActive(bool* aIsActive) {
   return NS_OK;
 }
 
+NS_IMETHODIMP
+ContentAnalysis::GetMightBeActive(bool* aMightBeActive) {
+  *aMightBeActive = StaticPrefs::browser_contentanalysis_enabled();
+  return NS_OK;
+}
+
 nsresult ContentAnalysis::RunAnalyzeRequestTask(
     RefPtr<nsIContentAnalysisRequest> aRequest,
     RefPtr<mozilla::dom::Promise> aPromise) {
