@@ -74,10 +74,10 @@ NS_IMETHODIMP nsClipboardProxy::AsyncSetData(
 
 class SendDoClipboardContentAnalysisRunnable final : public Runnable {
  public:
-  SendDoClipboardContentAnalysisRunnable(CondVar& promiseDone,
-                                         std::atomic<int32_t>& promiseResult,
-                                         layers::LayersId layersId,
-                                         IPCTransferableData&& dataTransfer)
+  SendDoClipboardContentAnalysisRunnable(
+      CondVar& promiseDone,
+      contentanalysis::MaybeContentAnalysisResult& promiseResult,
+      layers::LayersId layersId, IPCTransferableData&& dataTransfer)
       : Runnable("SendDoClipboardContentAnalysisRunnable"),
         mPromiseDone(promiseDone),
         mPromiseResult(promiseResult),
@@ -85,22 +85,24 @@ class SendDoClipboardContentAnalysisRunnable final : public Runnable {
         mDataTransfer(dataTransfer) {}
   NS_IMETHOD Run() override {
     CondVar& localPromiseDone = mPromiseDone;
-    std::atomic<int32_t>& localPromiseResult = mPromiseResult;
+    contentanalysis::MaybeContentAnalysisResult& localPromiseResult =
+        mPromiseResult;
     ContentChild::GetSingleton()
         ->GetContentAnalysisChild()
         ->SendDoClipboardContentAnalysis(mLayersId, std::move(mDataTransfer))
         ->Then(
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
-            [&localPromiseDone, &localPromiseResult](int32_t result) {
+            [&localPromiseDone, &localPromiseResult](
+                contentanalysis::MaybeContentAnalysisResult result) {
               localPromiseResult = result;
               localPromiseDone.Notify();
             },
             /* reject */
             [&localPromiseDone,
              &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
-              localPromiseResult =
-                  nsIContentAnalysisResponse::ACTION_UNSPECIFIED;
+              localPromiseResult.value = AsVariant(
+                  contentanalysis::NoContentAnalysisResult::ERROR_OTHER);
               localPromiseDone.Notify();
             });
     return NS_OK;
@@ -109,7 +111,7 @@ class SendDoClipboardContentAnalysisRunnable final : public Runnable {
  private:
   ~SendDoClipboardContentAnalysisRunnable() override = default;
   CondVar& mPromiseDone;
-  std::atomic<int32_t>& mPromiseResult;
+  contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
   layers::LayersId mLayersId;
   IPCTransferableData& mDataTransfer;
 };
@@ -117,11 +119,10 @@ class SendDoClipboardContentAnalysisRunnable final : public Runnable {
 // Turn off thread safety analysis because of the way we acquire a mutex
 // only if content analysis might be active
 NS_IMETHODIMP
-nsClipboardProxy::GetData(
-    nsITransferable* aTransferable, int32_t aWhichClipboard,
-    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
-                     mozilla::dom::BrowserParent*>
-        aSource) MOZ_NO_THREAD_SAFETY_ANALYSIS {
+nsClipboardProxy::GetData(nsITransferable* aTransferable,
+                          int32_t aWhichClipboard,
+                          Variant<Nothing, dom::Document*, dom::BrowserParent*>
+                              aSource) MOZ_NO_THREAD_SAFETY_ANALYSIS {
   nsTArray<nsCString> types;
   aTransferable->FlavorsTransferableCanImport(types);
 
@@ -147,7 +148,7 @@ nsClipboardProxy::GetData(
   // of the time.
   nsresult rv;
   nsCOMPtr<nsIContentAnalysis> contentAnalysis =
-      mozilla::components::nsIContentAnalysis::Service(&rv);
+      components::nsIContentAnalysis::Service(&rv);
   bool contentAnalysisMightBeActive = false;
   NS_ENSURE_SUCCESS(rv, rv);
   rv = contentAnalysis->GetMightBeActive(&contentAnalysisMightBeActive);
@@ -161,7 +162,7 @@ nsClipboardProxy::GetData(
     // with an already-locked Mutex
     promiseDoneMutex.Lock();
     CondVar promiseDoneCondVar(promiseDoneMutex, "nsClipboardProxy::GetData");
-    std::atomic<int32_t> promiseResult;
+    contentanalysis::MaybeContentAnalysisResult promiseResult;
 
     // TODO - this is a very klunky way of making a copy of dataTransfer
     // (since we need it below)
@@ -184,11 +185,13 @@ nsClipboardProxy::GetData(
     contentAnalysisEventTarget->Dispatch(runnable.forget(),
                                          nsIEventTarget::DISPATCH_NORMAL);
     promiseDoneCondVar.Wait();
-    // TODO - check these conditions
-    if (promiseResult == nsIContentAnalysisResponse::ACTION_UNSPECIFIED ||
-        promiseResult == nsIContentAnalysisResponse::BLOCK) {
-      allowCopy = false;
-    }
+    // TODO - I am concerned here that there could be memory coherency issues
+    // here, where reading the value of promiseResult might get optimized away
+    // by the compiler or something. I was hoping to keep promiseResult in an
+    // Atomic<>, but the type is now too complicated for that (it's not
+    // trivially copyable, for one thing)
+    allowCopy = promiseResult.ShouldAllowContent();
+    // This is needed to avoid assertions when the mutex gets destroyed.
     promiseDoneMutex.Unlock();
   }
 

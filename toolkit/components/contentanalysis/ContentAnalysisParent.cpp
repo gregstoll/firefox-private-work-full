@@ -9,6 +9,7 @@
 #include "nsITransferable.h"
 #include "nsGlobalWindowInner.h"
 #include "mozilla/Components.h"
+#include "mozilla/contentanalysis/ContentAnalysisIPCTypes.h"
 #include "mozilla/dom/AutoEntryScript.h"
 #include "mozilla/dom/BrowserParent.h"
 #include "mozilla/dom/CanonicalBrowsingContext.h"
@@ -35,23 +36,21 @@ class ContentAnalysisPastePromiseListener
       if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
         if (actionValue.isNumber()) {
           double actionNumber = actionValue.toNumber();
-          mResolver(static_cast<int32_t>(actionNumber));
+          mResolver(contentanalysis::MaybeContentAnalysisResult(
+              static_cast<int32_t>(actionNumber)));
           return;
         }
       }
     }
-    // TODO - probably need a better error code?
-    mResolver(
-        static_cast<int32_t>(nsIContentAnalysisResponse::ACTION_UNSPECIFIED));
+    mResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE));
   }
 
   virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
     // call to content analysis failed
-    // TODO - indicate error to user
-    // TODO - probably need a better error code
-    mResolver(
-        static_cast<int32_t>(nsIContentAnalysisResponse::ACTION_UNSPECIFIED));
+    mResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
   }
 
  private:
@@ -73,68 +72,82 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
     nsCOMPtr<nsIContentAnalysis> contentAnalysis =
         mozilla::components::nsIContentAnalysis::Service(&rv);
     if (NS_FAILED(rv)) {
-      // TODO - is this right? (and others)
-      // TODO - probably need to call aResolver here
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::ERROR_OTHER));
       return IPC_OK();
     }
     bool contentAnalysisIsActive = false;
     rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
     if (NS_FAILED(rv)) {
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::AGENT_NOT_PRESENT));
       return IPC_OK();
     }
-    if (MOZ_UNLIKELY(contentAnalysisIsActive)) {
-      mozilla::dom::AutoEntryScript aes(
-          nsGlobalWindowInner::Cast(
-              browser->GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
-          "content analysis on clipboard copy");
-      nsAutoCString documentURICString;
-      RefPtr<nsIURI> currentURI =
-          browser->GetBrowsingContext()->GetCurrentURI();
-      rv = currentURI->GetSpec(documentURICString);
-      if (NS_FAILED(rv)) {
-        return IPC_OK();
-      }
-      nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
-      nsCOMPtr<nsISupports> transferData;
-      // TODO - is it OK if this fails? Probably, if there's no text
-      // equivalent?
-      nsCOMPtr<nsITransferable> trans =
-          do_CreateInstance("@mozilla.org/widget/transferable;1", &rv);
-      NS_ENSURE_SUCCESS(rv, IPC_OK());
-      trans->Init(nullptr);
+    if (MOZ_LIKELY(!contentAnalysisIsActive)) {
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::AGENT_NOT_PRESENT));
+      return IPC_OK();
+    }
+    mozilla::dom::AutoEntryScript aes(
+        nsGlobalWindowInner::Cast(
+            browser->GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
+        "content analysis on clipboard copy");
+    nsAutoCString documentURICString;
+    RefPtr<nsIURI> currentURI = browser->GetBrowsingContext()->GetCurrentURI();
+    rv = currentURI->GetSpec(documentURICString);
+    if (NS_FAILED(rv)) {
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::ERROR_OTHER));
+      return IPC_OK();
+    }
+    nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+    nsCOMPtr<nsISupports> transferData;
+    // TODO - is it OK if this fails? Probably, if there's no text
+    // equivalent?
+    nsCOMPtr<nsITransferable> trans =
+        do_CreateInstance("@mozilla.org/widget/transferable;1", &rv);
+    NS_ENSURE_SUCCESS(rv, IPC_OK());
+    trans->Init(nullptr);
 
-      rv = nsContentUtils::IPCTransferableDataToTransferable(aData, false, trans,
-                                                         false);
+    rv = nsContentUtils::IPCTransferableDataToTransferable(aData, false, trans,
+                                                       false);
+    if (NS_FAILED(rv)) {
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::ERROR_OTHER));
+      return IPC_OK();
+    }
+    rv = trans->GetTransferData(kTextMime, getter_AddRefs(transferData));
+    if (NS_FAILED(rv)) {
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::ERROR_OTHER));
+      return IPC_OK();
+    }
+    nsCOMPtr<nsISupportsString> textData = do_QueryInterface(transferData);
+    // TODO - is it OK if this fails? Seems like this shouldn't fail
+    nsString text;
+    if (MOZ_LIKELY(textData)) {
+      rv = textData->GetData(text);
       if (NS_FAILED(rv)) {
+        aResolver(contentanalysis::MaybeContentAnalysisResult(
+            NoContentAnalysisResult::ERROR_OTHER));
         return IPC_OK();
       }
-      rv = trans->GetTransferData(kTextMime, getter_AddRefs(transferData));
-      if (NS_FAILED(rv)) {
-        return IPC_OK();
-      }
-      nsCOMPtr<nsISupportsString> textData = do_QueryInterface(transferData);
-      // TODO - is it OK if this fails? Seems like this shouldn't fail
-      nsString text;
-      if (MOZ_LIKELY(textData)) {
-        rv = textData->GetData(text);
-        if (NS_FAILED(rv)) {
-          return IPC_OK();
-        }
-      }
+    }
 
-      nsCString emptyDigest;
-      nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
-          new mozilla::contentanalysis::ContentAnalysisRequest(
-              nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text),
-              false, std::move(emptyDigest), std::move(documentURIString)));
-      rv = contentAnalysis->AnalyzeContentRequest(
-          contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
-      // TODO handle error
-      if (NS_SUCCEEDED(rv)) {
-        RefPtr<ContentAnalysisPastePromiseListener> listener =
-            new ContentAnalysisPastePromiseListener(aResolver);
-        contentAnalysisPromise->AppendNativeHandler(listener);
-      }
+    nsCString emptyDigest;
+    nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+        new mozilla::contentanalysis::ContentAnalysisRequest(
+            nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text), false,
+            std::move(emptyDigest), std::move(documentURIString)));
+    rv = contentAnalysis->AnalyzeContentRequest(
+        contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+    if (NS_SUCCEEDED(rv)) {
+      RefPtr<ContentAnalysisPastePromiseListener> listener =
+          new ContentAnalysisPastePromiseListener(aResolver);
+      contentAnalysisPromise->AppendNativeHandler(listener);
+    } else {
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::ERROR_OTHER));
     }
   }
   return IPC_OK();
