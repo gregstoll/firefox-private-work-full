@@ -7,6 +7,7 @@
 #ifndef mozilla_ContentAnalysisChild_h
 #define mozilla_ContentAnalysisChild_h
 
+#include "mozilla/contentanalysis/ContentAnalysisIPCTypes.h"
 #include "mozilla/contentanalysis/PContentAnalysisChild.h"
 
 namespace mozilla {

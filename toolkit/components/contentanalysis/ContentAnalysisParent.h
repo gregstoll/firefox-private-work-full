@@ -8,6 +8,7 @@
 #define mozilla_ContentAnalysisParent_h
 
 #include "nsIURI.h"
+#include "mozilla/contentanalysis/ContentAnalysisIPCTypes.h"
 #include "mozilla/contentanalysis/PContentAnalysisParent.h"
 #include "mozilla/dom/BrowserParent.h"
 #include "mozilla/layers/LayersTypes.h"

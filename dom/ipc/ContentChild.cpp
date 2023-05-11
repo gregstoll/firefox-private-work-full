@@ -1575,7 +1575,7 @@ class CreateContentAnalysisRunnable final : public Runnable {
   NS_IMETHOD Run() override {
     mChild = new contentanalysis::ContentAnalysisChild();
     if (!mEndpoint.Bind(mChild)) {
-      // TODO handle error
+      MOZ_CRASH("Bind failed in CreateContentAnalysisRunnable::Run");
     }
     return NS_OK;
   }
@@ -1591,7 +1591,8 @@ mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
   nsresult rv = NS_CreateBackgroundTaskQueue(
       "ContentAnalysis", mContentAnalysisEventTarget.StartAssignment());
   if (NS_WARN_IF(NS_FAILED(rv))) {
-    // TODO handle error
+    return IPC_FAIL(this,
+                    "Failed to create task queue for ContentAnalysisChild");
   }
 
   RefPtr<CreateContentAnalysisRunnable> runnable =

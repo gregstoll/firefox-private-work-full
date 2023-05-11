@@ -23,6 +23,7 @@ EXPORTS += ["ContentAnalysis.h"]
 
 EXPORTS.mozilla.contentanalysis += [
     "ContentAnalysisChild.h",
+    "ContentAnalysisIPCTypes.h",
     "ContentAnalysisParent.h",
 ]
 
