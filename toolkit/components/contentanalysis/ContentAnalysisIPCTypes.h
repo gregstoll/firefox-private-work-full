@@ -7,6 +7,7 @@
 #ifndef mozilla_ContentAnalysisIPCTypes_h
 #define mozilla_ContentAnalysisIPCTypes_h
 
+#include "ipc/EnumSerializer.h"
 #include "mozilla/Variant.h"
 #include "nsIContentAnalysis.h"
 
@@ -17,22 +18,58 @@ enum class NoContentAnalysisResult : uint8_t {
   AGENT_NOT_PRESENT,
   ERROR_INVALID_JSON_RESPONSE,
   ERROR_OTHER,
+  LAST_VALUE = ERROR_OTHER
 };
 
-using MaybeContentAnalysisResult = Variant<int32_t, NoContentAnalysisResult>;
+struct MaybeContentAnalysisResult {
+  MaybeContentAnalysisResult() : value(NoContentAnalysisResult::ERROR_OTHER) {}
+  MaybeContentAnalysisResult(int32_t response) : value(response) {}
+  MaybeContentAnalysisResult(NoContentAnalysisResult result) : value(result) {}
+  MaybeContentAnalysisResult(const MaybeContentAnalysisResult&) = default;
+  MaybeContentAnalysisResult(MaybeContentAnalysisResult&&) = default;
+  MaybeContentAnalysisResult& operator=(const MaybeContentAnalysisResult&) =
+      default;
+  MaybeContentAnalysisResult& operator=(MaybeContentAnalysisResult&&) = default;
 
-bool ShouldAllowContent(MaybeContentAnalysisResult result) {
-  if (result.is<NoContentAnalysisResult>()) {
-    return result.as<NoContentAnalysisResult>() ==
-           NoContentAnalysisResult::AGENT_NOT_PRESENT;
+  bool ShouldAllowContent() const {
+    if (value.is<NoContentAnalysisResult>()) {
+      return value.as<NoContentAnalysisResult>() ==
+             NoContentAnalysisResult::AGENT_NOT_PRESENT;
+    }
+    int32_t responseCode = value.as<int32_t>();
+    return responseCode == nsIContentAnalysisResponse::ALLOW ||
+           responseCode == nsIContentAnalysisResponse::REPORT_ONLY ||
+           responseCode == nsIContentAnalysisResponse::WARN;
   }
-  int32_t responseCode = result.as<int32_t>();
-  return responseCode == nsIContentAnalysisResponse::ALLOW ||
-         responseCode == nsIContentAnalysisResponse::REPORT_ONLY ||
-         responseCode == nsIContentAnalysisResponse::WARN;
-}
+
+  Variant<int32_t, NoContentAnalysisResult> value;
+};
 
 }  // namespace contentanalysis
 }  // namespace mozilla
+
+namespace IPC {
+using namespace mozilla::contentanalysis;
+
+template <>
+struct ParamTraits<NoContentAnalysisResult>
+    : public ContiguousEnumSerializerInclusive<
+          NoContentAnalysisResult, static_cast<NoContentAnalysisResult>(0),
+          NoContentAnalysisResult::LAST_VALUE> {};
+
+template <>
+struct ParamTraits<MaybeContentAnalysisResult> {
+  typedef MaybeContentAnalysisResult paramType;
+
+  static void Write(MessageWriter* aWriter, const paramType& aParam) {
+    WriteParam(aWriter, aParam.value);
+  }
+
+  static bool Read(MessageReader* aReader, paramType* aResult) {
+    return ReadParam(aReader, &(aResult->value));
+  }
+};
+
+}  // namespace IPC
 
 #endif  // mozilla_ContentAnalysisIPCTypes_h
