@@ -1,0 +1,13 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "nsISupports.idl"
+
+/* TODO description */
+
+[scriptable, uuid(8cb2b628-6176-4e10-9925-cd0f1886e247)]
+interface nsIContentAnalysisViews : nsISupports
+{
+    void showMessage(in ACString message);
+};

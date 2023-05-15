@@ -8,3 +8,17 @@ with Files("**"):
     BUG_COMPONENT = ("Toolkit", "General")
 
 JAR_MANIFESTS += ["jar.mn"]
+
+XPIDL_SOURCES += [
+    "nsIContentAnalysisViews.idl",
+]
+
+XPIDL_MODULE = "browser-contentanalysis"
+
+EXTRA_JS_MODULES += [
+    "ContentAnalysisViewsService.jsm",
+]
+
+XPCOM_MANIFESTS += [
+    "components.conf",
+]

@@ -16,6 +16,7 @@
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/PromiseNativeHandler.h"
 #include "nsISupportsPrimitives.h"
+#include "nsIContentAnalysisViews.h"
 
 namespace mozilla::contentanalysis {
 
@@ -142,6 +143,10 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
     rv = contentAnalysis->AnalyzeContentRequest(
         contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
     if (NS_SUCCEEDED(rv)) {
+      nsCOMPtr<nsIContentAnalysisViews> views =
+          do_CreateInstance("@mozilla.org/browser/contentanalysisviews-service;1", &rv);
+      NS_ENSURE_SUCCESS(rv, IPC_OK());
+      views->ShowMessage("doing content analysis"_ns);
       RefPtr<ContentAnalysisPastePromiseListener> listener =
           new ContentAnalysisPastePromiseListener(aResolver);
       contentAnalysisPromise->AppendNativeHandler(listener);
