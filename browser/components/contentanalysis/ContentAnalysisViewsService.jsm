@@ -51,8 +51,13 @@ XPCOMUtils.defineLazyServiceGetters(lazy, {
  *
  * Constants are fine in the global scope.
  */
-
 class ContentAnalysisViewsService {
+  _SHOW_NOTIFICATIONS = true;
+  _SHOW_DIALOGS = false;
+  _SLOW_DLP_NOTIFICATION_TIMEOUT_MS = 30 * 1000; // 30 sec
+  _RESULT_NOTIFICATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
+  _RESULT_NOTIFICATION_FAST_TIMEOUT_MS = 60 * 1000; // 1 min
+
   constructor() {
     this.classID = Components.ID("{2fe1d4b3-2849-4faa-a36a-5f0184755d61}");
     this.QueryInterface = ChromeUtils.generateQI([
@@ -60,7 +65,7 @@ class ContentAnalysisViewsService {
     ]);
   }
 
-  showMessage(message) {
+  OLDshowMessage(message) {
     let alert = Cc["@mozilla.org/alert-notification;1"].createInstance(
       Ci.nsIAlertNotification
     );
@@ -82,6 +87,79 @@ class ContentAnalysisViewsService {
     );
 
     lazy.AlertsService.showAlert(alert);
+  }
+
+  showMessage(aMessage, aTimeout, innerWindow) {
+    debugger;
+    if (this._SHOW_DIALOGS) {
+      window.alert(aMessage);
+    }
+
+    if (this._SHOW_NOTIFICATIONS) {
+      const notification = new Notification("Content Analysis", {
+        body: aMessage,
+        ownerGlobal: innerWindow,
+      });
+
+      //      notification.addEventListener('click', () => { notification.close(); });
+      if (aTimeout != 0) {
+        setTimeout(() => {
+          notification.close();
+        }, aTimeout);
+      }
+      return notification;
+    }
+
+    return null;
+  }
+
+  /**
+   * Show a messagge to the user to indicate that a CA request is taking
+   * a long time.
+   */
+  _showSlowCAMessage(aOperation, aResourceName) {
+    // TODO: Better message
+    return this._showMessage(
+      "The Content Analysis Tool is taking a looooong time to respond..."
+    );
+  }
+
+  /**
+   * Show a message to the user to indicate the result of a CA request.
+   */
+  _showCAResult(aOperation, aResourceName, aCAResult) {
+    // TODO: Better messages
+    let message = null;
+    let timeoutMs = 0;
+
+    switch (aCAResult) {
+      case Ci.nsIContentAnalysisAcknowledgement.ALLOW:
+        // We don't need to show anything
+        break;
+      case Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY:
+        message = "CA responded with REPORT_ONLY";
+        timeoutMs = this._RESULT_NOTIFICATION_FAST_TIMEOUT_MS;
+        break;
+      case Ci.nsIContentAnalysisAcknowledgement.WARN:
+        message = "CA responded with WARN";
+        timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
+        break;
+      case Ci.nsIContentAnalysisAcknowledgement.BLOCK:
+        message = "CA responded with BLOCK.  Transfer denied.";
+        timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
+        break;
+      case Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED:
+        message =
+          "An error occurred in communicating with the CA.  Transfer denied.";
+        timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
+        break;
+    }
+
+    if (message) {
+      return this._showMessage(message, timeoutMs);
+    }
+
+    return null;
   }
 }
 

@@ -89,9 +89,10 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
           NoContentAnalysisResult::AGENT_NOT_PRESENT));
       return IPC_OK();
     }
+    nsGlobalWindowInner* innerWindow = nsGlobalWindowInner::Cast(
+            browser->GetOwnerElement()->OwnerDoc()->GetInnerWindow());
     mozilla::dom::AutoEntryScript aes(
-        nsGlobalWindowInner::Cast(
-            browser->GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
+        innerWindow,
         "content analysis on clipboard copy");
     nsAutoCString documentURICString;
     RefPtr<nsIURI> currentURI = browser->GetBrowsingContext()->GetCurrentURI();
@@ -146,7 +147,7 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
       nsCOMPtr<nsIContentAnalysisViews> views =
           do_CreateInstance("@mozilla.org/browser/contentanalysisviews-service;1", &rv);
       NS_ENSURE_SUCCESS(rv, IPC_OK());
-      views->ShowMessage("doing content analysis"_ns);
+      views->ShowMessage("doing content analysis"_ns, 0, innerWindow->GetOwnerGlobal());
       RefPtr<ContentAnalysisPastePromiseListener> listener =
           new ContentAnalysisPastePromiseListener(aResolver);
       contentAnalysisPromise->AppendNativeHandler(listener);

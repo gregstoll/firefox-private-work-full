@@ -4,10 +4,12 @@
 
 #include "nsISupports.idl"
 
+interface nsIGlobalObject;
+
 /* TODO description */
 
 [scriptable, uuid(8cb2b628-6176-4e10-9925-cd0f1886e247)]
 interface nsIContentAnalysisViews : nsISupports
 {
-    void showMessage(in ACString message);
+    void showMessage(in ACString message, in long timeout, in nsIGlobalObject innerWindow);
 };
