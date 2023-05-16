@@ -49,6 +49,26 @@ var ContentAnalysisViews = {
     this.initializeDownloadCA();
   },
 
+  // TODO - I guess we're stuck with having to do this because these are defined
+  // in the SDK? But yuck.
+  responseResultToAcknowledgementResult(responseResult) {
+    switch (responseResult) {
+      case Ci.nsIContentAnalysisResponse.REPORT_ONLY:
+        return Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY;
+      case Ci.nsIContentAnalysisResponse.WARN:
+        return Ci.nsIContentAnalysisAcknowledgement.WARN;
+      case Ci.nsIContentAnalysisResponse.BLOCK:
+        return Ci.nsIContentAnalysisAcknowledgement.BLOCK;
+      case Ci.nsIContentAnalysisResponse.ALLOW:
+        return Ci.nsIContentAnalysisAcknowledgement.ALLOW;
+      case Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED:
+        return Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED;
+      default:
+        // TODO - assert or warn here?
+        return Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED;
+    }
+  },
+
   /**
    * Register for file download CA events.
    */
@@ -83,6 +103,46 @@ var ContentAnalysisViews = {
               downloadsView,
               "quit-application-requested"
             );
+            Services.obs.removeObserver(downloadsView, "dlp-request-made");
+            Services.obs.removeObserver(downloadsView, "dlp-response");
+            break;
+          case "dlp-request-made":
+            // TODO - check correct window
+            const SLOW_TIMEOUT_MS = 3000; // 3 sec
+
+            // Start timer that, when it expires,
+            // presents a "slow CA check" message.
+            if (!this.dlpBusyView) {
+              this.dlpBusyView = {
+                timer: setTimeout(() => {
+                  this.dlpBusyView = {
+                    notification: this._showSlowCAMessage(
+                      aSubj.analysisType,
+                      "clipboard"
+                    ),
+                  };
+                }, SLOW_TIMEOUT_MS),
+              };
+            }
+            break;
+          case "dlp-response":
+            // TODO - check correct window
+            // Cancels timer or slow message UI,
+            // if present, and possibly presents the CA verdict.
+            this._disconnectFromView(this.dlpBusyView);
+            this.dlpBusyView = undefined;
+            const responseResult =
+              aSubj?.QueryInterface(Ci.nsIContentAnalysisResponse)?.action ??
+              Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED;
+            this.resultView = {
+              notification: this._showCAResult(
+                Ci.nsIContentAnalysisRequest
+                  .FILE_DOWNLOADED /* TODO fix this type */,
+                "clipboard",
+                this.responseResultToAcknowledgementResult(responseResult)
+              ),
+            };
+            break;
         }
       },
 
@@ -145,6 +205,8 @@ var ContentAnalysisViews = {
     };
 
     Services.obs.addObserver(downloadsView, "quit-application-requested");
+    Services.obs.addObserver(downloadsView, "dlp-request-made");
+    Services.obs.addObserver(downloadsView, "dlp-response");
     await (await Downloads.getList(Downloads.ALL)).addView(downloadsView);
   },
 

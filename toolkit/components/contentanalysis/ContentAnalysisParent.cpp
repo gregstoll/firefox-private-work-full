@@ -30,6 +30,8 @@ class ContentAnalysisPastePromiseListener
         mContentAnalysisPromise(aContentAnalysisPromise) {}
   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
+    nsCOMPtr<nsIObserverService> obsServ =
+        mozilla::services::GetObserverService();
     if (aValue.isObject()) {
       auto* obj = aValue.toObjectOrNull();
       JS::Handle<JSObject*> handle =
@@ -37,14 +39,17 @@ class ContentAnalysisPastePromiseListener
       JS::RootedValue actionValue(aCx);
       if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
         if (actionValue.isNumber()) {
-          double actionNumber = actionValue.toNumber();
-          mResolver(contentanalysis::MaybeContentAnalysisResult(
-              static_cast<int32_t>(actionNumber)));
+          int32_t actionNumber = static_cast<int32_t>(actionValue.toNumber());
+          mResolver(contentanalysis::MaybeContentAnalysisResult(actionNumber));
           mContentAnalysisPromise->Release();
+          RefPtr<ContentAnalysisResponse> response =
+              ContentAnalysisResponse::FromAction(actionNumber);
+          obsServ->NotifyObservers(response, "dlp-response", nullptr);
           return;
         }
       }
     }
+    obsServ->NotifyObservers(nullptr, "dlp-response", nullptr);
     mResolver(contentanalysis::MaybeContentAnalysisResult(
         NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE));
     mContentAnalysisPromise->Release();
@@ -153,6 +158,10 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
   rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
                                               &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
+    nsCOMPtr<nsIObserverService> obsServ =
+        mozilla::services::GetObserverService();
+    obsServ->NotifyObservers(contentAnalysisRequest, "dlp-request-made",
+                             nullptr);
     RefPtr<ContentAnalysisPastePromiseListener> listener =
         new ContentAnalysisPastePromiseListener(aResolver,
                                                 contentAnalysisPromise);
