@@ -123,7 +123,10 @@ class nsBaseClipboard : public ClipboardSetDataHelper {
   NS_IMETHOD IsClipboardTypeSupported(int32_t aWhichClipboard,
                                       bool* aRetval) override final;
   RefPtr<mozilla::GenericPromise> AsyncGetData(
-      nsITransferable* aTransferable, int32_t aWhichClipboard) override;
+      nsITransferable* aTransferable, int32_t aWhichClipboard,
+      mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
+                       mozilla::dom::BrowserParent*>
+        aSource) override;
   RefPtr<DataFlavorsPromise> AsyncHasDataMatchingFlavors(
       const nsTArray<nsCString>& aFlavorList, int32_t aWhichClipboard) override;
 

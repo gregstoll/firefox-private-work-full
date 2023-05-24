@@ -1226,7 +1226,7 @@ parent:
 
     // Given a list of supported types, returns the clipboard data for the
     // first type that matches.
-    async GetClipboardAsync(nsCString[] aTypes, int32_t aWhichClipboard) returns (IPCTransferableDataOrError transferableData);
+    async GetClipboardAsync(nsCString[] aTypes, int32_t aWhichClipboard, nullable PBrowser aBrowser) returns (IPCTransferableDataOrError transferableData);
 
     // Clears the clipboard.
     async EmptyClipboard(int32_t aWhichClipboard);
