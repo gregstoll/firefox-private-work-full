@@ -14,6 +14,7 @@
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/AutoRestore.h"
+#include "mozilla/Components.h"
 #include "mozilla/ContentIterator.h"
 #include "mozilla/DisplayPortUtils.h"
 #include "mozilla/EventDispatcher.h"
@@ -57,6 +58,8 @@
 #include "nsContentList.h"
 #include "nsPresContext.h"
 #include "nsIContent.h"
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
 #include "mozilla/dom/BrowserBridgeChild.h"
 #include "mozilla/dom/BrowsingContext.h"
 #include "mozilla/dom/CanonicalBrowsingContext.h"
@@ -8573,6 +8576,96 @@ PresShell::EventHandler::GetDocumentPrincipalToCompareWithBlacklist(
   return presContext->Document()->GetPrincipalForPrefBasedHacks();
 }
 
+class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
+ public:
+   NS_DECL_ISUPPORTS
+
+   ContentAnalysisDropPromiseListener(nsCOMPtr<nsINode> aEventTarget, RefPtr<nsPresContext> aPresContext,
+                          WidgetEvent* aEvent, nsEventStatus* aEventStatus, nsPresShellEventCB* aEventCBPtr)
+      : mEventTarget(aEventTarget),
+        mPresContext(aPresContext),
+        mEvent(aEvent),
+        mEventStatus(aEventStatus),
+        mEventCBPtr(aEventCBPtr) {}
+
+   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+     mozilla::ErrorResult& aRv) override {
+      // TODO synchronization
+      // TODO error checking
+      bool allowDrop = false;
+      if (aValue.isObject()) {
+        auto* obj = aValue.toObjectOrNull();
+        JS::Handle<JSObject*> handle = JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+        JS::RootedValue actionValue(aCx);
+        if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+          if (actionValue.isNumber()) {
+            double actionNumber = actionValue.toNumber();
+            if (actionNumber !=
+                static_cast<double>(
+                    nsIContentAnalysisResponse::BLOCK)) {
+              allowDrop = true;
+            }
+          }
+        }
+      }
+      if (allowDrop) {
+        EventDispatcher::Dispatch(mEventTarget, mPresContext, mEvent, nullptr,
+                                  mEventStatus, mEventCBPtr);
+      }
+   }
+   
+   virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                 mozilla::ErrorResult& aRv) override {
+     // Nothing to do
+   }
+
+ private:
+   ~ContentAnalysisDropPromiseListener() = default;
+  nsCOMPtr<nsINode> mEventTarget;
+  RefPtr<nsPresContext> mPresContext;
+  WidgetEvent* mEvent;
+  nsEventStatus* mEventStatus;
+  nsPresShellEventCB* mEventCBPtr;
+};
+
+NS_IMPL_ISUPPORTS0(ContentAnalysisDropPromiseListener)
+
+class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
+ public:
+  SendDoDragAndDropContentAnalysisRunnable(
+      MaybeDiscardedBrowsingContext&& aBrowsingContext)
+      : Runnable("SendDoDragAndDropContentAnalysisRunnable"),
+        mBrowsingContext(aBrowsingContext) {}
+
+  NS_IMETHOD Run() override {
+    //BrowsingContext* localBrowsingContext = mBrowsingContext;
+    ContentChild::GetSingleton()
+        ->GetContentAnalysisChild()
+        ->SendDoDragAndDropContentAnalysis(std::move(mBrowsingContext))
+        ->Then(
+            GetCurrentSerialEventTarget(), __func__,
+            /* resolve */
+            [](
+                contentanalysis::MaybeContentAnalysisResult result) {
+                bool allowCopy = result.ShouldAllowContent();
+                if (allowCopy) {
+                  // TODO - do the copy
+                } else {
+                  // TODO - do something here?
+                }
+            },
+            /* reject */
+            [](mozilla::ipc::ResponseRejectReason aReason) {
+                // TODO - do something here?
+            });
+    return NS_OK;
+  }
+
+ private:
+  ~SendDoDragAndDropContentAnalysisRunnable() override = default;
+  MaybeDiscardedBrowsingContext mBrowsingContext;
+};
+
 nsresult PresShell::EventHandler::DispatchEventToDOM(
     WidgetEvent* aEvent, nsEventStatus* aEventStatus,
     nsPresShellEventCB* aEventCB) {
@@ -8673,8 +8766,71 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
           aEventStatus, eventCBPtr);
     } else {
       RefPtr<nsPresContext> presContext = GetPresContext();
-      EventDispatcher::Dispatch(eventTarget, presContext, aEvent, nullptr,
-                                aEventStatus, eventCBPtr);
+      bool waitForContentAnalysis = false;
+      if (aEvent->mMessage == eDrop) {
+        nsresult rv;
+        nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+            mozilla::components::nsIContentAnalysis::Service(&rv);
+        NS_ENSURE_SUCCESS(rv, rv);
+        bool contentAnalysisMightBeActive = false;
+        rv = contentAnalysis->GetMightBeActive(
+            &contentAnalysisMightBeActive);
+        NS_ENSURE_SUCCESS(rv, rv);
+        // TODO better null check
+        // TODO - why does this happen in the parent process too? sigh
+        if (contentAnalysisMightBeActive && presContext && XRE_IsContentProcess()) {
+          // TODO cleanup
+          if (presContext->GetDocShell()) {
+            //layers::LayersId layersId = browserChild->GetLayersId();
+            waitForContentAnalysis = true;
+
+            MaybeDiscardedBrowsingContext browsingContext(presContext->GetDocShell()->GetBrowsingContext());
+            RefPtr<SendDoDragAndDropContentAnalysisRunnable> runnable =
+                new SendDoDragAndDropContentAnalysisRunnable(std::move(browsingContext));
+            auto contentAnalysisEventTarget =
+                ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
+            contentAnalysisEventTarget->Dispatch(runnable.forget(),
+                                                 nsIEventTarget::DISPATCH_NORMAL);
+          }
+          // TODO
+          //Document* ownerDocument = eventTarget->GetOwnerDocument();
+          //if (ownerDocument) {
+          //  nsIURI* uri = ownerDocument->GetDocumentURI();
+          //  if (uri && !uri->SchemeIs("chrome")) {
+          //    nsAutoCString documentURICString;
+          //    rv = uri->GetSpec(documentURICString);
+          //    if (NS_SUCCEEDED(rv)) {
+          //      nsString documentURIString =
+          //        NS_ConvertUTF8toUTF16(documentURICString);
+          //      AutoEntryScript aes(nsGlobalWindowInner::Cast(ownerDocument->GetInnerWindow()), "call content analysis");
+          //      // TODO - need to do this in the parent process
+          //      // TODO
+          //      nsString filePath;
+          //      nsCString digestString;
+          //      nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+          //          new mozilla::contentanalysis::ContentAnalysisRequest(
+          //              nsIContentAnalysisRequest::FILE_ATTACHED, std::move(filePath),
+          //              true, std::move(digestString), std::move(documentURIString)));
+          //      mozilla::dom::Promise* promise = nullptr;
+          //      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest,
+          //                                                  aes.cx(), &promise);
+          //      RefPtr<ContentAnalysisDropPromiseListener> listener = new ContentAnalysisDropPromiseListener(
+          //          eventTarget, presContext, aEvent, aEventStatus, eventCBPtr);
+          //      // TODO - better handling
+          //      if (NS_SUCCEEDED(rv)) {
+          //        waitForContentAnalysis = true;
+          //        promise->AppendNativeHandler(listener);
+          //      }
+          //    }
+          //  }
+          //}
+        }
+      }
+
+      if (!waitForContentAnalysis) {
+        EventDispatcher::Dispatch(eventTarget, presContext, aEvent, nullptr,
+                                  aEventStatus, eventCBPtr);
+      }
     }
   }
   return rv;

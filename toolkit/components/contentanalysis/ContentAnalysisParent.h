@@ -23,6 +23,9 @@ class ContentAnalysisParent final : public PContentAnalysisParent {
       const layers::LayersId& aLayersId, const IPCTransferableData& aData,
       DoClipboardContentAnalysisResolver&& aResolver);
 
+  mozilla::ipc::IPCResult RecvDoDragAndDropContentAnalysis(
+      const MaybeDiscardedBrowsingContext& aBrowsingContext,
+      DoClipboardContentAnalysisResolver&& aResolver);
  private:
   virtual ~ContentAnalysisParent() = default;
 };
