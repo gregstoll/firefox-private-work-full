@@ -266,8 +266,6 @@ nsFileControlFrame::DnDListener::HandleEvent(Event* aEvent) {
           }
         }
       }
-      auto* doc = this->mFrame->mContent->OwnerDoc();
-      BrowserChild* browserChild = BrowserChild::GetFrom(doc->GetDocShell());
 
       // Entries API.
       if (blinkFileSystemEnabled) {

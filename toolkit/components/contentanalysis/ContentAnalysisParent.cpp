@@ -165,16 +165,10 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
 }
 
 mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
-    const MaybeDiscardedBrowsingContext& aBrowsingContext,
+    PBrowserParent* aBrowserParent,
     DoClipboardContentAnalysisResolver&& aResolver) {
   nsresult rv;
   mozilla::dom::Promise* contentAnalysisPromise = nullptr;
-  if (aBrowsingContext.IsNullOrDiscarded()) {
-    // not eligible for content analysis
-    aResolver(contentanalysis::MaybeContentAnalysisResult(
-        NoContentAnalysisResult::NO_PARENT_BROWSER));
-    return IPC_OK();
-  }
   nsCOMPtr<nsIContentAnalysis> contentAnalysis =
       mozilla::components::nsIContentAnalysis::Service(&rv);
   if (NS_FAILED(rv)) {
@@ -195,7 +189,9 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
     return IPC_OK();
   }
   nsAutoCString documentURICString;
-  RefPtr<nsIURI> currentURI = aBrowsingContext->Canonical()->GetCurrentURI();
+  mozilla::dom::BrowserParent* parent = mozilla::dom::BrowserParent::GetFrom(aBrowserParent);
+  //RefPtr<nsIURI> currentURI = aBrowsingContext->Canonical()->GetCurrentURI();
+  RefPtr<nsIURI> currentURI = parent->GetBrowsingContext()->GetCurrentURI();
   rv = currentURI->GetSpec(documentURICString);
   if (NS_FAILED(rv)) {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
@@ -207,14 +203,15 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
   // TODO
   nsString emptyFilePath;
   nsCString emptyDigest;
-  if (!aBrowsingContext->GetDocument()) {
+  /* if (!aBrowsingContext->GetDocument()) {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
         NoContentAnalysisResult::ERROR_OTHER));
     return IPC_OK();
-  }
+  }*/
   mozilla::dom::AutoEntryScript aes(
-      nsGlobalWindowInner::Cast(
-          aBrowsingContext->GetDocument()->GetInnerWindow()),
+      nsGlobalWindowInner::Cast(parent->GetOwnerElement()
+                                    ->OwnerDoc()
+                                    ->GetInnerWindow()),
       "content analysis on clipboard copy");
   nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
       new mozilla::contentanalysis::ContentAnalysisRequest(

@@ -8633,15 +8633,15 @@ NS_IMPL_ISUPPORTS0(ContentAnalysisDropPromiseListener)
 class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
  public:
   SendDoDragAndDropContentAnalysisRunnable(
-      MaybeDiscardedBrowsingContext&& aBrowsingContext)
+      BrowserChild* aBrowser)
       : Runnable("SendDoDragAndDropContentAnalysisRunnable"),
-        mBrowsingContext(aBrowsingContext) {}
+        mBrowser(aBrowser) {}
 
   NS_IMETHOD Run() override {
     //BrowsingContext* localBrowsingContext = mBrowsingContext;
     ContentChild::GetSingleton()
         ->GetContentAnalysisChild()
-        ->SendDoDragAndDropContentAnalysis(std::move(mBrowsingContext))
+        ->SendDoDragAndDropContentAnalysis(mBrowser)
         ->Then(
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
@@ -8663,7 +8663,7 @@ class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
 
  private:
   ~SendDoDragAndDropContentAnalysisRunnable() override = default;
-  MaybeDiscardedBrowsingContext mBrowsingContext;
+  BrowserChild* mBrowser;
 };
 
 nsresult PresShell::EventHandler::DispatchEventToDOM(
@@ -8784,9 +8784,11 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
             //layers::LayersId layersId = browserChild->GetLayersId();
             waitForContentAnalysis = true;
 
-            MaybeDiscardedBrowsingContext browsingContext(presContext->GetDocShell()->GetBrowsingContext());
+            BrowserChild* browserChild =
+                BrowserChild::GetFrom(presContext.get()->GetDocShell());
+            //MaybeDiscardedBrowsingContext browsingContext(presContext->GetDocShell()->GetBrowsingContext());
             RefPtr<SendDoDragAndDropContentAnalysisRunnable> runnable =
-                new SendDoDragAndDropContentAnalysisRunnable(std::move(browsingContext));
+                new SendDoDragAndDropContentAnalysisRunnable(browserChild);
             auto contentAnalysisEventTarget =
                 ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
             contentAnalysisEventTarget->Dispatch(runnable.forget(),

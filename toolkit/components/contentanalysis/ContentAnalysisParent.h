@@ -24,7 +24,7 @@ class ContentAnalysisParent final : public PContentAnalysisParent {
       DoClipboardContentAnalysisResolver&& aResolver);
 
   mozilla::ipc::IPCResult RecvDoDragAndDropContentAnalysis(
-      const MaybeDiscardedBrowsingContext& aBrowsingContext,
+      PBrowserParent* aBrowser,
       DoClipboardContentAnalysisResolver&& aResolver);
  private:
   virtual ~ContentAnalysisParent() = default;

@@ -1,6 +1,7 @@
 include "mozilla/layers/LayersMessageUtils.h";
 
 include IPCTransferable;
+include protocol PBrowser;
 
 using mozilla::layers::LayersId from "mozilla/layers/LayersTypes.h";
 using mozilla::contentanalysis::MaybeContentAnalysisResult from "mozilla/contentanalysis/ContentAnalysisIPCTypes.h";
@@ -17,7 +18,7 @@ async protocol PContentAnalysis
 parent:
     async DoClipboardContentAnalysis(LayersId layersId, IPCTransferableData data)
         returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
-    async DoDragAndDropContentAnalysis(MaybeDiscardedBrowsingContext aBrowsingContext)
+    async DoDragAndDropContentAnalysis(nullable PBrowser aBrowser)
         returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
 };
 
