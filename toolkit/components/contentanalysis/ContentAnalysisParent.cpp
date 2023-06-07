@@ -4,6 +4,7 @@
 
 #include "ContentAnalysisParent.h"
 #include "ContentAnalysis.h"
+#include "ErrorList.h"
 #include "nsIContentAnalysis.h"
 #include "nsISupportsImpl.h"
 #include "nsITransferable.h"
@@ -15,7 +16,10 @@
 #include "mozilla/dom/CanonicalBrowsingContext.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsIFile.h"
 #include "nsISupportsPrimitives.h"
+#include "GMPUtils.h"
+#include "ScopedNSSTypes.h"
 
 namespace mozilla::contentanalysis {
 
@@ -191,7 +195,6 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
   }
   nsAutoCString documentURICString;
   mozilla::dom::BrowserParent* parent = mozilla::dom::BrowserParent::GetBrowserParentFromLayersId(aLayersId);
-  //RefPtr<nsIURI> currentURI = aBrowsingContext->Canonical()->GetCurrentURI();
   RefPtr<nsIURI> currentURI = parent->GetBrowsingContext()->GetCurrentURI();
   rv = currentURI->GetSpec(documentURICString);
   if (NS_FAILED(rv)) {
@@ -202,13 +205,57 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
   nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
 
   // TODO
-  nsString emptyFilePath = aFilePaths[0];
-  nsCString emptyDigest;
-  /* if (!aBrowsingContext->GetDocument()) {
+  nsString filePath = aFilePaths[0];
+  // TODO handle error
+  // TODO - is FILE_ATTACHED right?
+  mozilla::Digest digest;
+  digest.Begin(SEC_OID_SHA256);
+  PRFileDesc* fd = nullptr;
+  nsCOMPtr<nsIFile> file =
+      do_CreateInstance("@mozilla.org/file/local;1", &rv);
+  if (NS_FAILED(rv)) {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
         NoContentAnalysisResult::ERROR_OTHER));
     return IPC_OK();
-  }*/
+  }
+
+  rv = file->InitWithPath(filePath);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  rv = file->OpenNSPRFileDesc(PR_RDONLY | nsIFile::OS_READAHEAD, 0, &fd);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  // TODO - is this too small? Or is there a better way to do this?
+  uint8_t buffer[4096];
+  PRInt32 bytesRead;
+  bytesRead = PR_Read(fd, buffer, sizeof(buffer) / sizeof(uint8_t));
+  while (bytesRead != 0) {
+    if (bytesRead == -1) {
+      PR_Close(fd);
+      // TODO?
+      aResolver(contentanalysis::MaybeContentAnalysisResult(
+          NoContentAnalysisResult::ERROR_OTHER));
+      return IPC_OK();
+    }
+    digest.Update(mozilla::Span<const uint8_t>(buffer, bytesRead));
+    bytesRead = PR_Read(fd, buffer, sizeof(buffer) / sizeof(uint8_t));
+  }
+  PR_Close(fd);
+  nsTArray<uint8_t> digestResults;
+  rv = digest.End(digestResults);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  nsCString digestString = mozilla::ToHexString(digestResults);
+
   mozilla::dom::AutoEntryScript aes(
       nsGlobalWindowInner::Cast(parent->GetOwnerElement()
                                     ->OwnerDoc()
@@ -216,8 +263,8 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
       "content analysis on clipboard copy");
   nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
       new mozilla::contentanalysis::ContentAnalysisRequest(
-          nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(emptyFilePath), true,
-          std::move(emptyDigest), std::move(documentURIString)));
+          nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath), true,
+          std::move(digestString), std::move(documentURIString)));
   rv = contentAnalysis->AnalyzeContentRequest(
       contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {

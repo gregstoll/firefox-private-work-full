@@ -8765,7 +8765,7 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
       }
     }
 
-    bool allowCopy = true;
+    bool allowDispatchingEvent = true;
     if (aEvent->mClass == eCompositionEventClass) {
       RefPtr<nsPresContext> presContext = GetPresContext();
       RefPtr<BrowserParent> browserParent =
@@ -8857,7 +8857,7 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                 // by the compiler or something. I was hoping to keep promiseResult in an
                 // Atomic<>, but the type is now too complicated for that (it's not
                 // trivially copyable, for one thing)
-                allowCopy = promiseResult.ShouldAllowContent();
+                allowDispatchingEvent = promiseResult.ShouldAllowContent();
                 // This is needed to avoid assertions when the mutex gets destroyed.
                 promiseDoneMutex.Unlock();
               }
@@ -8866,7 +8866,7 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
         }
       }
 
-      if (allowCopy) {
+      if (allowDispatchingEvent) {
         EventDispatcher::Dispatch(eventTarget, presContext, aEvent, nullptr,
                                   aEventStatus, eventCBPtr);
       }
