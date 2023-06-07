@@ -164,4 +164,71 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
+    const layers::LayersId& aLayersId,
+    nsTArray<nsString>&& aFilePaths,
+    DoClipboardContentAnalysisResolver&& aResolver) {
+  nsresult rv;
+  mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      mozilla::components::nsIContentAnalysis::Service(&rv);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  bool contentAnalysisIsActive = false;
+  rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+  if (MOZ_LIKELY(!contentAnalysisIsActive)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+  nsAutoCString documentURICString;
+  mozilla::dom::BrowserParent* parent = mozilla::dom::BrowserParent::GetBrowserParentFromLayersId(aLayersId);
+  //RefPtr<nsIURI> currentURI = aBrowsingContext->Canonical()->GetCurrentURI();
+  RefPtr<nsIURI> currentURI = parent->GetBrowsingContext()->GetCurrentURI();
+  rv = currentURI->GetSpec(documentURICString);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+
+  // TODO
+  nsString emptyFilePath = aFilePaths[0];
+  nsCString emptyDigest;
+  /* if (!aBrowsingContext->GetDocument()) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }*/
+  mozilla::dom::AutoEntryScript aes(
+      nsGlobalWindowInner::Cast(parent->GetOwnerElement()
+                                    ->OwnerDoc()
+                                    ->GetInnerWindow()),
+      "content analysis on clipboard copy");
+  nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+      new mozilla::contentanalysis::ContentAnalysisRequest(
+          nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(emptyFilePath), true,
+          std::move(emptyDigest), std::move(documentURIString)));
+  rv = contentAnalysis->AnalyzeContentRequest(
+      contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+  if (NS_SUCCEEDED(rv)) {
+    RefPtr<ContentAnalysisPromiseListener> listener =
+        new ContentAnalysisPromiseListener(aResolver);
+    contentAnalysisPromise->AppendNativeHandler(listener);
+  } else {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+  }
+  return IPC_OK();
+}
+
 }  // namespace mozilla::contentanalysis

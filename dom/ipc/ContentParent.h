@@ -8,7 +8,6 @@
 #define mozilla_dom_ContentParent_h
 
 #include "mozilla/contentanalysis/ContentAnalysisParent.h"
-#include "mozilla/contentanalysis/ContentAnalysisIPCTypes.h"
 #include "mozilla/dom/PContentParent.h"
 #include "mozilla/dom/ipc/IdType.h"
 #include "mozilla/dom/MessageManagerCallback.h"
@@ -1009,11 +1008,6 @@ class ContentParent final : public PContentParent,
 
   already_AddRefed<PClipboardWriteRequestParent>
   AllocPClipboardWriteRequestParent(const int32_t& aClipboardType);
-
-  mozilla::ipc::IPCResult RecvDoDragAndDropContentAnalysis(
-      PBrowserParent* aBrowser,
-      nsTArray<nsString>&& aFilePaths,
-      DoDragAndDropContentAnalysisResolver&& aResolver);
 
   mozilla::ipc::IPCResult RecvPlaySound(nsIURI* aURI);
   mozilla::ipc::IPCResult RecvBeep();

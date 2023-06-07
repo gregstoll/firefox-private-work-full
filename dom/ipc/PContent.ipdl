@@ -161,8 +161,6 @@ using mozilla::dom::Wireframe from "mozilla/dom/DocumentBinding.h";
 using mozilla::PerfStats::MetricMask from "mozilla/PerfStats.h";
 [RefCounted] using class nsIX509Cert from "nsIX509Cert.h";
 using nsIDNSService::ResolverMode from "nsIDNSService.h";
-using mozilla::contentanalysis::MaybeContentAnalysisResult from "mozilla/contentanalysis/ContentAnalysisIPCTypes.h";
-using class mozilla::WidgetDragEvent from "ipc/nsGUIEventIPC.h";
 
 union ChromeRegistryItem
 {
@@ -1249,9 +1247,6 @@ parent:
      *         The clipboard type defined in nsIClipboard.
      */
     async PClipboardWriteRequest(int32_t aClipboardType);
-
-    async DoDragAndDropContentAnalysis(nullable PBrowser aBrowser, nsString [] fileNames)
-        returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
 
     // 'Play', 'Beep' and 'PlayEventSound' are the only nsISound methods used in
     // the content process.

@@ -8630,41 +8630,49 @@ class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
 
 NS_IMPL_ISUPPORTS0(ContentAnalysisDropPromiseListener)
 
-//class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
-// public:
-//  SendDoDragAndDropContentAnalysisRunnable(
-//      BrowserChild* aBrowser)
-//      : Runnable("SendDoDragAndDropContentAnalysisRunnable"),
-//        mBrowser(aBrowser) {}
-//
-//  NS_IMETHOD Run() override {
-//    //BrowsingContext* localBrowsingContext = mBrowsingContext;
-//    ContentChild::GetSingleton()
-//        ->GetContentAnalysisChild()
-//        ->SendDoDragAndDropContentAnalysis(mBrowser)
-//        ->Then(
-//            GetCurrentSerialEventTarget(), __func__,
-//            /* resolve */
-//            [](
-//                contentanalysis::MaybeContentAnalysisResult result) {
-//                bool allowCopy = result.ShouldAllowContent();
-//                if (allowCopy) {
-//                  // TODO - do the copy
-//                } else {
-//                  // TODO - do something here?
-//                }
-//            },
-//            /* reject */
-//            [](mozilla::ipc::ResponseRejectReason aReason) {
-//                // TODO - do something here?
-//            });
-//    return NS_OK;
-//  }
-//
-// private:
-//  ~SendDoDragAndDropContentAnalysisRunnable() override = default;
-//  BrowserChild* mBrowser;
-//};
+class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
+ public:
+  SendDoDragAndDropContentAnalysisRunnable(CondVar& promiseDone,
+      contentanalysis::MaybeContentAnalysisResult& promiseResult,
+      const layers::LayersId aLayersId, nsTArray<nsString>&& aFilePaths)
+      : Runnable("SendDoDragAndDropContentAnalysisRunnable"),
+        mPromiseDone(promiseDone),
+        mPromiseResult(promiseResult),
+        mLayersId(aLayersId),
+        mFilePaths(std::move(aFilePaths)){}
+
+  NS_IMETHOD Run() override {
+    CondVar& localPromiseDone = mPromiseDone;
+    contentanalysis::MaybeContentAnalysisResult& localPromiseResult =
+        mPromiseResult;
+    ContentChild::GetSingleton()
+        ->GetContentAnalysisChild()
+        ->SendDoDragAndDropContentAnalysis(mLayersId, std::move(mFilePaths))
+        ->Then(
+            GetCurrentSerialEventTarget(), __func__,
+            /* resolve */
+            [&localPromiseDone, &localPromiseResult](
+                contentanalysis::MaybeContentAnalysisResult result) {
+              localPromiseResult = result;
+              localPromiseDone.Notify();
+            },
+            /* reject */
+            [&localPromiseDone,
+             &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
+              localPromiseResult.value = AsVariant(
+                  contentanalysis::NoContentAnalysisResult::ERROR_OTHER);
+              localPromiseDone.Notify();
+            });
+    return NS_OK;
+  }
+
+ private:
+  ~SendDoDragAndDropContentAnalysisRunnable() override = default;
+  CondVar& mPromiseDone;
+  contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
+  layers::LayersId mLayersId;
+  nsTArray<nsString> mFilePaths;
+};
 
 nsresult PresShell::EventHandler::DispatchEventToDOM(
     WidgetEvent* aEvent, nsEventStatus* aEventStatus,
@@ -8757,6 +8765,7 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
       }
     }
 
+    bool allowCopy = true;
     if (aEvent->mClass == eCompositionEventClass) {
       RefPtr<nsPresContext> presContext = GetPresContext();
       RefPtr<BrowserParent> browserParent =
@@ -8766,7 +8775,6 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
           aEventStatus, eventCBPtr);
     } else {
       RefPtr<nsPresContext> presContext = GetPresContext();
-      bool waitForContentAnalysis = false;
       if (aEvent->mMessage == eDrop) {
         nsresult rv;
         nsCOMPtr<nsIContentAnalysis> contentAnalysis =
@@ -8781,16 +8789,18 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
         if (contentAnalysisMightBeActive && presContext && XRE_IsContentProcess()) {
           // TODO cleanup
           if (presContext->GetDocShell()) {
-            // We would like to use nsContentUtils::SetDataTransferInEvent() here, but the event isn't
-            // set up right yet (for example, mTarget is NULL). So, just get the active drag session
-            // and get the data we need from there.
-            //rv = nsContentUtils::SetDataTransferInEvent(widgetDragEvent);
-            nsCOMPtr<nsIDragSession> dragSession = nsContentUtils::GetDragSession();
+            //  We would like to use nsContentUtils::SetDataTransferInEvent()
+            //  here, but the event isn't set up right yet (for example,
+            //  mTarget is NULL). So, just get the active drag session and get
+            //  the data we need from there.
+            // rv = nsContentUtils::SetDataTransferInEvent(widgetDragEvent);
+            nsCOMPtr<nsIDragSession> dragSession =
+                nsContentUtils::GetDragSession();
             DataTransfer* dataTransfer = dragSession->GetDataTransfer();
             nsTArray<nsString> filePaths;
             if (dataTransfer->HasFile()) {
-              // GetFiles doesn't work right because the event doesn't have a parent yet.
-              //RefPtr<FileList> fileList = dataTransfer->GetFiles(*nsContentUtils::GetSystemPrincipal());
+              // GetFiles doesn't work right because the event doesn't have a
+              // parent yet.
               const DataTransferItemList* itemList = dataTransfer->Items();
               for (uint32_t i = 0; i < itemList->Length(); ++i) {
                 bool found;
@@ -8800,13 +8810,15 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                   ErrorResult errorResult;
                   // TODO - is this the right principal?
                   // TODO - not using this errorResult right
-                  nsCOMPtr<nsIVariant> data = item->Data(nsContentUtils::GetSystemPrincipal(),
-                             errorResult);
+                  nsCOMPtr<nsIVariant> data = item->Data(
+                      nsContentUtils::GetSystemPrincipal(), errorResult);
                   nsCOMPtr<nsISupports> supports;
                   errorResult = data->GetAsISupports(getter_AddRefs(supports));
-                  MOZ_ASSERT(!errorResult.Failed() && supports,
-                     "File objects should be stored as nsISupports variants");
-                  if (nsCOMPtr<BlobImpl> blobImpl = do_QueryInterface(supports)) {
+                  MOZ_ASSERT(
+                      !errorResult.Failed() && supports,
+                      "File objects should be stored as nsISupports variants");
+                  if (nsCOMPtr<BlobImpl> blobImpl =
+                          do_QueryInterface(supports)) {
                     MOZ_ASSERT(blobImpl->IsFile());
                     blobImpl->GetMozFullPath(path, SystemCallerGuarantee(),
                                              errorResult);
@@ -8814,8 +8826,8 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                                  do_QueryInterface(supports)) {
                     ifile->GetPath(path);
                   }
-                  //item->GetMozFullPathInternal(path, errorResult);
-                  // TODO - is this error handling ok?
+                  // item->GetMozFullPathInternal(path, errorResult);
+                  //  TODO - is this error handling ok?
                   nsresult localRv = errorResult.StealNSResult();
                   if (NS_SUCCEEDED(localRv) && !path.IsEmpty()) {
                     filePaths.EmplaceBack(std::move(path));
@@ -8823,76 +8835,38 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                 }
               }
               if (!filePaths.IsEmpty()) {
-                waitForContentAnalysis = true;
                 BrowserChild* browserChild =
                     BrowserChild::GetFrom(presContext->GetDocShell());
-                // TODO this is sketchy
-                // WidgetDragEvent* widgetDragEvent = aEvent->AsDragEvent();
-                ContentChild::GetSingleton()
-                    ->SendDoDragAndDropContentAnalysis(
-                        browserChild, filePaths)
-                    ->Then(
-                        GetCurrentSerialEventTarget(), __func__,
-                        /* resolve */
-                        [](contentanalysis::MaybeContentAnalysisResult result) {
-                          bool allowCopy = result.ShouldAllowContent();
-                          if (allowCopy) {
-                            // TODO - do the copy
-                          } else {
-                            // TODO - do something here?
-                          }
-                        },
-                        /* reject */
-                        [](mozilla::ipc::ResponseRejectReason aReason) {
-                          // TODO - do something here?
-                        });
+                layers::LayersId layersId = browserChild->GetLayersId();
+                Mutex promiseDoneMutex("PresShell::EventHandler");
+                // TODO there may be a more idiomatic way to do this than to use a CondVar
+                // with an already-locked Mutex
+                promiseDoneMutex.Lock();
+                CondVar promiseDoneCondVar(promiseDoneMutex, "PresShell::EventHandler");
+                contentanalysis::MaybeContentAnalysisResult promiseResult;
+                RefPtr<SendDoDragAndDropContentAnalysisRunnable> runnable =
+                    new SendDoDragAndDropContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId, std::move(filePaths));
+                auto contentAnalysisEventTarget =
+                    ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
+                contentAnalysisEventTarget->Dispatch(runnable.forget(),
+                                                     nsIEventTarget::DISPATCH_NORMAL);
 
-                // RefPtr<SendDoDragAndDropContentAnalysisRunnable> runnable =
-                //     new SendDoDragAndDropContentAnalysisRunnable(browserChild);
-                // auto contentAnalysisEventTarget =
-                //     ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
-                // contentAnalysisEventTarget->Dispatch(runnable.forget(),
-                //                                      nsIEventTarget::DISPATCH_NORMAL);
-
+                promiseDoneCondVar.Wait();
+                // TODO - I am concerned here that there could be memory coherency issues
+                // here, where reading the value of promiseResult might get optimized away
+                // by the compiler or something. I was hoping to keep promiseResult in an
+                // Atomic<>, but the type is now too complicated for that (it's not
+                // trivially copyable, for one thing)
+                allowCopy = promiseResult.ShouldAllowContent();
+                // This is needed to avoid assertions when the mutex gets destroyed.
+                promiseDoneMutex.Unlock();
               }
             }
           }
-          // TODO
-          //Document* ownerDocument = eventTarget->GetOwnerDocument();
-          //if (ownerDocument) {
-          //  nsIURI* uri = ownerDocument->GetDocumentURI();
-          //  if (uri && !uri->SchemeIs("chrome")) {
-          //    nsAutoCString documentURICString;
-          //    rv = uri->GetSpec(documentURICString);
-          //    if (NS_SUCCEEDED(rv)) {
-          //      nsString documentURIString =
-          //        NS_ConvertUTF8toUTF16(documentURICString);
-          //      AutoEntryScript aes(nsGlobalWindowInner::Cast(ownerDocument->GetInnerWindow()), "call content analysis");
-          //      // TODO - need to do this in the parent process
-          //      // TODO
-          //      nsString filePath;
-          //      nsCString digestString;
-          //      nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
-          //          new mozilla::contentanalysis::ContentAnalysisRequest(
-          //              nsIContentAnalysisRequest::FILE_ATTACHED, std::move(filePath),
-          //              true, std::move(digestString), std::move(documentURIString)));
-          //      mozilla::dom::Promise* promise = nullptr;
-          //      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest,
-          //                                                  aes.cx(), &promise);
-          //      RefPtr<ContentAnalysisDropPromiseListener> listener = new ContentAnalysisDropPromiseListener(
-          //          eventTarget, presContext, aEvent, aEventStatus, eventCBPtr);
-          //      // TODO - better handling
-          //      if (NS_SUCCEEDED(rv)) {
-          //        waitForContentAnalysis = true;
-          //        promise->AppendNativeHandler(listener);
-          //      }
-          //    }
-          //  }
-          //}
         }
       }
 
-      if (!waitForContentAnalysis) {
+      if (allowCopy) {
         EventDispatcher::Dispatch(eventTarget, presContext, aEvent, nullptr,
                                   aEventStatus, eventCBPtr);
       }
