@@ -8630,41 +8630,41 @@ class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
 
 NS_IMPL_ISUPPORTS0(ContentAnalysisDropPromiseListener)
 
-class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
- public:
-  SendDoDragAndDropContentAnalysisRunnable(
-      BrowserChild* aBrowser)
-      : Runnable("SendDoDragAndDropContentAnalysisRunnable"),
-        mBrowser(aBrowser) {}
-
-  NS_IMETHOD Run() override {
-    //BrowsingContext* localBrowsingContext = mBrowsingContext;
-    ContentChild::GetSingleton()
-        ->GetContentAnalysisChild()
-        ->SendDoDragAndDropContentAnalysis(mBrowser)
-        ->Then(
-            GetCurrentSerialEventTarget(), __func__,
-            /* resolve */
-            [](
-                contentanalysis::MaybeContentAnalysisResult result) {
-                bool allowCopy = result.ShouldAllowContent();
-                if (allowCopy) {
-                  // TODO - do the copy
-                } else {
-                  // TODO - do something here?
-                }
-            },
-            /* reject */
-            [](mozilla::ipc::ResponseRejectReason aReason) {
-                // TODO - do something here?
-            });
-    return NS_OK;
-  }
-
- private:
-  ~SendDoDragAndDropContentAnalysisRunnable() override = default;
-  BrowserChild* mBrowser;
-};
+//class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
+// public:
+//  SendDoDragAndDropContentAnalysisRunnable(
+//      BrowserChild* aBrowser)
+//      : Runnable("SendDoDragAndDropContentAnalysisRunnable"),
+//        mBrowser(aBrowser) {}
+//
+//  NS_IMETHOD Run() override {
+//    //BrowsingContext* localBrowsingContext = mBrowsingContext;
+//    ContentChild::GetSingleton()
+//        ->GetContentAnalysisChild()
+//        ->SendDoDragAndDropContentAnalysis(mBrowser)
+//        ->Then(
+//            GetCurrentSerialEventTarget(), __func__,
+//            /* resolve */
+//            [](
+//                contentanalysis::MaybeContentAnalysisResult result) {
+//                bool allowCopy = result.ShouldAllowContent();
+//                if (allowCopy) {
+//                  // TODO - do the copy
+//                } else {
+//                  // TODO - do something here?
+//                }
+//            },
+//            /* reject */
+//            [](mozilla::ipc::ResponseRejectReason aReason) {
+//                // TODO - do something here?
+//            });
+//    return NS_OK;
+//  }
+//
+// private:
+//  ~SendDoDragAndDropContentAnalysisRunnable() override = default;
+//  BrowserChild* mBrowser;
+//};
 
 nsresult PresShell::EventHandler::DispatchEventToDOM(
     WidgetEvent* aEvent, nsEventStatus* aEventStatus,
@@ -8781,18 +8781,81 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
         if (contentAnalysisMightBeActive && presContext && XRE_IsContentProcess()) {
           // TODO cleanup
           if (presContext->GetDocShell()) {
-            //layers::LayersId layersId = browserChild->GetLayersId();
-            waitForContentAnalysis = true;
+            // We would like to use nsContentUtils::SetDataTransferInEvent() here, but the event isn't
+            // set up right yet (for example, mTarget is NULL). So, just get the active drag session
+            // and get the data we need from there.
+            //rv = nsContentUtils::SetDataTransferInEvent(widgetDragEvent);
+            nsCOMPtr<nsIDragSession> dragSession = nsContentUtils::GetDragSession();
+            DataTransfer* dataTransfer = dragSession->GetDataTransfer();
+            nsTArray<nsString> filePaths;
+            if (dataTransfer->HasFile()) {
+              // GetFiles doesn't work right because the event doesn't have a parent yet.
+              //RefPtr<FileList> fileList = dataTransfer->GetFiles(*nsContentUtils::GetSystemPrincipal());
+              const DataTransferItemList* itemList = dataTransfer->Items();
+              for (uint32_t i = 0; i < itemList->Length(); ++i) {
+                bool found;
+                DataTransferItem* item = itemList->IndexedGetter(0, found);
+                if (item->Kind() == DataTransferItem::KIND_FILE) {
+                  nsString path;
+                  ErrorResult errorResult;
+                  // TODO - is this the right principal?
+                  // TODO - not using this errorResult right
+                  nsCOMPtr<nsIVariant> data = item->Data(nsContentUtils::GetSystemPrincipal(),
+                             errorResult);
+                  nsCOMPtr<nsISupports> supports;
+                  errorResult = data->GetAsISupports(getter_AddRefs(supports));
+                  MOZ_ASSERT(!errorResult.Failed() && supports,
+                     "File objects should be stored as nsISupports variants");
+                  if (nsCOMPtr<BlobImpl> blobImpl = do_QueryInterface(supports)) {
+                    MOZ_ASSERT(blobImpl->IsFile());
+                    blobImpl->GetMozFullPath(path, SystemCallerGuarantee(),
+                                             errorResult);
+                  } else if (nsCOMPtr<nsIFile> ifile =
+                                 do_QueryInterface(supports)) {
+                    ifile->GetPath(path);
+                  }
+                  //item->GetMozFullPathInternal(path, errorResult);
+                  // TODO - is this error handling ok?
+                  nsresult localRv = errorResult.StealNSResult();
+                  if (NS_SUCCEEDED(localRv) && !path.IsEmpty()) {
+                    filePaths.EmplaceBack(std::move(path));
+                  }
+                }
+              }
+              if (!filePaths.IsEmpty()) {
+                waitForContentAnalysis = true;
+                BrowserChild* browserChild =
+                    BrowserChild::GetFrom(presContext->GetDocShell());
+                // TODO this is sketchy
+                // WidgetDragEvent* widgetDragEvent = aEvent->AsDragEvent();
+                ContentChild::GetSingleton()
+                    ->SendDoDragAndDropContentAnalysis(
+                        browserChild, filePaths)
+                    ->Then(
+                        GetCurrentSerialEventTarget(), __func__,
+                        /* resolve */
+                        [](contentanalysis::MaybeContentAnalysisResult result) {
+                          bool allowCopy = result.ShouldAllowContent();
+                          if (allowCopy) {
+                            // TODO - do the copy
+                          } else {
+                            // TODO - do something here?
+                          }
+                        },
+                        /* reject */
+                        [](mozilla::ipc::ResponseRejectReason aReason) {
+                          // TODO - do something here?
+                        });
 
-            BrowserChild* browserChild =
-                BrowserChild::GetFrom(presContext.get()->GetDocShell());
-            //MaybeDiscardedBrowsingContext browsingContext(presContext->GetDocShell()->GetBrowsingContext());
-            RefPtr<SendDoDragAndDropContentAnalysisRunnable> runnable =
-                new SendDoDragAndDropContentAnalysisRunnable(browserChild);
-            auto contentAnalysisEventTarget =
-                ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
-            contentAnalysisEventTarget->Dispatch(runnable.forget(),
-                                                 nsIEventTarget::DISPATCH_NORMAL);
+                // RefPtr<SendDoDragAndDropContentAnalysisRunnable> runnable =
+                //     new SendDoDragAndDropContentAnalysisRunnable(browserChild);
+                // auto contentAnalysisEventTarget =
+                //     ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
+                // contentAnalysisEventTarget->Dispatch(runnable.forget(),
+                //                                      nsIEventTarget::DISPATCH_NORMAL);
+
+              }
+            }
           }
           // TODO
           //Document* ownerDocument = eventTarget->GetOwnerDocument();
