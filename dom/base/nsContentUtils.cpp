@@ -7832,11 +7832,40 @@ bool nsContentUtils::IPCTransferableDataItemHasKnownFlavor(
   return false;
 }
 
+nsresult nsContentUtils::CloneIPCTransferable(
+  const IPCTransferableData& aSource,
+  IPCTransferableData& aDest) {
+  nsresult rv = NS_OK;
+  const nsTArray<IPCTransferableDataItem>& items = aSource.items();
+  aDest.items().Clear();
+  aDest.items().SetCapacity(aSource.items().Length());
+  for (const auto& item : items) {
+    nsCOMPtr<nsISupports> transferData;
+    IPCTransferableDataItem* newItem = aDest.items().AppendElement();
+    newItem->flavor() = item.flavor();
+    switch (item.data().type()) {
+      case IPCTransferableDataType::TIPCTransferableDataString: {
+        const auto& data = item.data().get_IPCTransferableDataString();
+        IPCTransferableDataString newString(BigBuffer(data.data().AsSpan()));
+        newItem->data() = std::move(newString);
+        break;
+      }
+      case IPCTransferableDataType::TIPCTransferableDataBlob: {
+        const auto& data = item.data().get_IPCTransferableDataBlob();
+        IPCTransferableDataBlob newBlob(data);
+        newItem->data() = std::move(newBlob);
+        break;
+      }
+    }
+  }
+  return rv;
+}
+
 nsresult nsContentUtils::IPCTransferableDataToTransferable(
-    const IPCTransferableData& aTransferableData, bool aAddDataFlavor,
+    const IPCTransferableData& aDataTransfer, bool aAddDataFlavor,
     nsITransferable* aTransferable, const bool aFilterUnknownFlavors) {
   nsresult rv;
-  const nsTArray<IPCTransferableDataItem>& items = aTransferableData.items();
+  const nsTArray<IPCTransferableDataItem>& items = aDataTransfer.items();
   for (const auto& item : items) {
     if (aFilterUnknownFlavors && !IPCTransferableDataItemHasKnownFlavor(item)) {
       NS_WARNING(

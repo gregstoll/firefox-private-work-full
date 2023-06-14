@@ -2859,6 +2859,10 @@ class nsContentUtils {
   static bool IPCTransferableDataItemHasKnownFlavor(
       const mozilla::dom::IPCTransferableDataItem& aItem);
 
+  static nsresult CloneIPCTransferable(
+      const mozilla::dom::IPCTransferableData& aSource,
+      mozilla::dom::IPCTransferableData& aDest);
+
   static nsresult IPCTransferableDataToTransferable(
       const mozilla::dom::IPCTransferableData& aTransferableData,
       bool aAddDataFlavor, nsITransferable* aTransferable,

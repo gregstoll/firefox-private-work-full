@@ -165,11 +165,14 @@ static nsresult CopyIPCDataTransfer(const mozilla::dom::IPCTransferableData& tra
       do_CreateInstance("@mozilla.org/widget/transferable;1", &rv));
   NS_ENSURE_SUCCESS(rv, rv);
   transferableTemp->Init(nullptr);
-  rv = nsContentUtils::IPCTransferableDataToTransferable(transferable, false,
+  // TODO - look at the second argument here
+  rv = nsContentUtils::IPCTransferableDataToTransferable(transferable, true,
                                                      transferableTemp, false);
   NS_ENSURE_SUCCESS(rv, rv);
+  // TODO - passing false for aSyncMessage here because otherwise the code
+  // won't copy files. The comments seem to indicate this might be OK now?
   nsContentUtils::TransferableToIPCTransferableData(
-      transferableTemp, &transferableCopy, true, nullptr);
+      transferableTemp, &transferableCopy, false, nullptr);
   return rv;
 }
 
