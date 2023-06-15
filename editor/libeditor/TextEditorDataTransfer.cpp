@@ -11,6 +11,7 @@
 
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/MouseEvents.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/DataTransfer.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/DocumentInlines.h"
@@ -18,6 +19,7 @@
 
 #include "nsAString.h"
 #include "nsCOMPtr.h"
+#include "nsClipboardProxy.h"
 #include "nsContentUtils.h"
 #include "nsDebug.h"
 #include "nsError.h"
@@ -192,13 +194,21 @@ nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
         "ignored");
     return NS_OK;  // XXX Why?
   }
+
   // Get the Data from the clipboard.
-  rv = clipboard->GetData(transferable, aClipboardType,
-                          AsVariant(GetDocument()));
+  auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (browserChild && clipboardProxy) {
+    rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType, browserChild);
+  } else {
+    rv = clipboard->GetData(transferable, aClipboardType);
+  }
+
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed, but ignored");
     return NS_OK;  // XXX Why?
   }
+
   // XXX Why don't we check this first?
   if (!IsModifiable()) {
     return NS_OK;

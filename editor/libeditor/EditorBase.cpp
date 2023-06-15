@@ -37,6 +37,7 @@
 #include "mozilla/intl/BidiEmbeddingLevel.h"
 #include "mozilla/BasePrincipal.h"            // for BasePrincipal
 #include "mozilla/CheckedInt.h"               // for CheckedInt
+#include "mozilla/Components.h"
 #include "mozilla/ComposerCommandsUpdater.h"  // for ComposerCommandsUpdater
 #include "mozilla/ContentEvents.h"            // for InternalClipboardEvent
 #include "mozilla/DebugOnly.h"                // for DebugOnly
@@ -56,6 +57,7 @@
 #include "mozilla/PresShell.h"              // for PresShell
 #include "mozilla/RangeBoundary.h"       // for RawRangeBoundary, RangeBoundary
 #include "mozilla/Services.h"            // for GetObserverService
+#include "mozilla/SpinEventLoopUntil.h"
 #include "mozilla/StaticPrefs_bidi.h"    // for StaticPrefs::bidi_*
 #include "mozilla/StaticPrefs_dom.h"     // for StaticPrefs::dom_*
 #include "mozilla/StaticPrefs_editor.h"  // for StaticPrefs::editor_*
@@ -68,6 +70,7 @@
 #include "mozilla/TransactionManager.h"   // for TransactionManager
 #include "mozilla/dom/AbstractRange.h"    // for AbstractRange
 #include "mozilla/dom/Attr.h"             // for Attr
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/BrowsingContext.h"  // for BrowsingContext
 #include "mozilla/dom/CharacterData.h"    // for CharacterData
 #include "mozilla/dom/DataTransfer.h"     // for DataTransfer
@@ -4498,9 +4501,12 @@ nsresult EditorBase::HandleDropEvent(DragEvent* aDropEvent) {
     return NS_ERROR_FAILURE;
   }
 
-  nsCOMPtr<nsIDragSession> dragSession = nsContentUtils::GetDragSession();
-  if (NS_WARN_IF(!dragSession)) {
-    return NS_ERROR_FAILURE;
+  nsCOMPtr<nsIDragSession> dragSession = aDropEvent->GetDragSession();
+  if (!dragSession) {
+    dragSession = nsContentUtils::GetDragSession();
+    if (NS_WARN_IF(!dragSession)) {
+      return NS_ERROR_FAILURE;
+    }
   }
 
   nsCOMPtr<nsINode> sourceNode = dataTransfer->GetMozSourceNode();
