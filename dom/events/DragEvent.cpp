@@ -72,7 +72,46 @@ CheckContentAnalysisPermission(nsCOMPtr<DataTransfer> aDataTransfer, RefPtr<nsPr
   for (uint32_t i = 0; i < itemList->Length(); ++i) {
     bool found;
     DataTransferItem* item = itemList->IndexedGetter(i, found);
-    if (item->Kind() == DataTransferItem::KIND_FILE) {
+    if (item->Kind() == DataTransferItem::KIND_STRING) {
+      ErrorResult errorResult;
+      // TODO - not using this errorResult right
+      nsCOMPtr<nsIVariant> data = item->Data(principal, errorResult);
+      if (errorResult.Failed()) {
+        return Err(errorResult.StealNSResult());
+      }
+      if (!data) {
+        // due to principal?
+        continue;
+      }
+
+      nsAutoString stringData;
+      nsresult rv = data->GetAsAString(stringData);
+      NS_ENSURE_SUCCESS(rv, Err(rv));
+
+      Maybe<bool> result;
+      browserChild
+          ->SendDoDragAndDropTextContentAnalysis(std::move(stringData))
+          ->Then(
+              GetCurrentSerialEventTarget(), __func__,
+              /* resolve */
+              [&result](const contentanalysis::MaybeContentAnalysisResult& aResult) {
+                result = Some(aResult.ShouldAllowContent());
+              },
+              /* reject */
+              [&result](mozilla::ipc::ResponseRejectReason aReason) {
+                result = Some(false);
+              });
+
+      SpinEventLoopUntil("SendDoDragAndDropTextContentAnalysis"_ns,
+        [&result]() -> bool {
+          return result.isSome();
+        });
+
+      if (!(*result)) {
+        // Rejected by content analysis
+        return false;
+      }
+    } else if (item->Kind() == DataTransferItem::KIND_FILE) {
       nsString path;
       ErrorResult errorResult;
       // TODO - is this the right principal?
