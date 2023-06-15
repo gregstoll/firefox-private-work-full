@@ -18,7 +18,9 @@ async protocol PContentAnalysis
 parent:
     async DoClipboardContentAnalysis(LayersId layersId, IPCTransferableData data)
         returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
-    async DoDragAndDropContentAnalysis(LayersId layersId, nsString[] fileNames)
+    async DoDragAndDropFilesContentAnalysis(LayersId layersId, nsString[] fileNames)
+        returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
+    async DoDragAndDropTextContentAnalysis(LayersId layersId, nsString text)
         returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
 };
 
