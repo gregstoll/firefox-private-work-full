@@ -168,10 +168,10 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
   return IPC_OK();
 }
 
-mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
+mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropFilesContentAnalysis(
     const layers::LayersId& aLayersId,
     nsTArray<nsString>&& aFilePaths,
-    DoClipboardContentAnalysisResolver&& aResolver) {
+    DoDragAndDropFilesContentAnalysisResolver&& aResolver) {
   nsresult rv;
   mozilla::dom::Promise* contentAnalysisPromise = nullptr;
   nsCOMPtr<nsIContentAnalysis> contentAnalysis =
@@ -278,4 +278,62 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropTextContentAnalysis(
+    const layers::LayersId& aLayersId,
+    nsString&& aText,
+    DoDragAndDropTextContentAnalysisResolver&& aResolver) {
+  nsresult rv;
+  mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      mozilla::components::nsIContentAnalysis::Service(&rv);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  bool contentAnalysisIsActive = false;
+  rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+  if (MOZ_LIKELY(!contentAnalysisIsActive)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+  nsAutoCString documentURICString;
+  mozilla::dom::BrowserParent* parent = mozilla::dom::BrowserParent::GetBrowserParentFromLayersId(aLayersId);
+  RefPtr<nsIURI> currentURI = parent->GetBrowsingContext()->GetCurrentURI();
+  rv = currentURI->GetSpec(documentURICString);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+
+  mozilla::dom::AutoEntryScript aes(
+      nsGlobalWindowInner::Cast(parent->GetOwnerElement()
+                                    ->OwnerDoc()
+                                    ->GetInnerWindow()),
+      "content analysis on clipboard copy");
+  nsCString emptyDigest;
+  nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+      new mozilla::contentanalysis::ContentAnalysisRequest(
+          nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(aText), false,
+          std::move(emptyDigest), std::move(documentURIString)));
+  rv = contentAnalysis->AnalyzeContentRequest(
+      contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+  if (NS_SUCCEEDED(rv)) {
+    RefPtr<ContentAnalysisPromiseListener> listener =
+        new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
+    contentAnalysisPromise->AppendNativeHandler(listener);
+  } else {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        NoContentAnalysisResult::ERROR_OTHER));
+  }
+  return IPC_OK();
+}
 }  // namespace mozilla::contentanalysis

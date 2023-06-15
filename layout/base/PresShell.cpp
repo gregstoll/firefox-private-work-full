@@ -8630,12 +8630,12 @@ class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
 
 NS_IMPL_ISUPPORTS0(ContentAnalysisDropPromiseListener)
 
-class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
+class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
  public:
-  SendDoDragAndDropContentAnalysisRunnable(CondVar& promiseDone,
+  SendDoDragAndDropFilesContentAnalysisRunnable(CondVar& promiseDone,
       contentanalysis::MaybeContentAnalysisResult& promiseResult,
       const layers::LayersId aLayersId, nsTArray<nsString>&& aFilePaths)
-      : Runnable("SendDoDragAndDropContentAnalysisRunnable"),
+      : Runnable("SendDoDragAndDropFilesContentAnalysisRunnable"),
         mPromiseDone(promiseDone),
         mPromiseResult(promiseResult),
         mLayersId(aLayersId),
@@ -8647,7 +8647,7 @@ class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
         mPromiseResult;
     ContentChild::GetSingleton()
         ->GetContentAnalysisChild()
-        ->SendDoDragAndDropContentAnalysis(mLayersId, std::move(mFilePaths))
+        ->SendDoDragAndDropFilesContentAnalysis(mLayersId, std::move(mFilePaths))
         ->Then(
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
@@ -8667,11 +8667,56 @@ class SendDoDragAndDropContentAnalysisRunnable final : public Runnable {
   }
 
  private:
-  ~SendDoDragAndDropContentAnalysisRunnable() override = default;
+  ~SendDoDragAndDropFilesContentAnalysisRunnable() override = default;
   CondVar& mPromiseDone;
   contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
   layers::LayersId mLayersId;
   nsTArray<nsString> mFilePaths;
+};
+
+// TODO - unify with the version in nsClipboardProxy.cpp?
+class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
+ public:
+  SendDoDragAndDropTextContentAnalysisRunnable(CondVar& promiseDone,
+      contentanalysis::MaybeContentAnalysisResult& promiseResult,
+      const layers::LayersId aLayersId, nsString&& aText)
+      : Runnable("SendDoDragAndDropTextContentAnalysisRunnable"),
+        mPromiseDone(promiseDone),
+        mPromiseResult(promiseResult),
+        mLayersId(aLayersId),
+        mText(std::move(aText)){}
+
+  NS_IMETHOD Run() override {
+    CondVar& localPromiseDone = mPromiseDone;
+    contentanalysis::MaybeContentAnalysisResult& localPromiseResult =
+        mPromiseResult;
+    ContentChild::GetSingleton()
+        ->GetContentAnalysisChild()
+        ->SendDoDragAndDropTextContentAnalysis(mLayersId, std::move(mText))
+        ->Then(
+            GetCurrentSerialEventTarget(), __func__,
+            /* resolve */
+            [&localPromiseDone, &localPromiseResult](
+                contentanalysis::MaybeContentAnalysisResult result) {
+              localPromiseResult = result;
+              localPromiseDone.Notify();
+            },
+            /* reject */
+            [&localPromiseDone,
+             &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
+              localPromiseResult.value = AsVariant(
+                  contentanalysis::NoContentAnalysisResult::ERROR_OTHER);
+              localPromiseDone.Notify();
+            });
+    return NS_OK;
+  }
+
+ private:
+  ~SendDoDragAndDropTextContentAnalysisRunnable() override = default;
+  CondVar& mPromiseDone;
+  contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
+  layers::LayersId mLayersId;
+  nsString mText;
 };
 
 nsresult PresShell::EventHandler::DispatchEventToDOM(
@@ -8844,8 +8889,8 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                 promiseDoneMutex.Lock();
                 CondVar promiseDoneCondVar(promiseDoneMutex, "PresShell::EventHandler");
                 contentanalysis::MaybeContentAnalysisResult promiseResult;
-                RefPtr<SendDoDragAndDropContentAnalysisRunnable> runnable =
-                    new SendDoDragAndDropContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId, std::move(filePaths));
+                RefPtr<SendDoDragAndDropFilesContentAnalysisRunnable> runnable =
+                    new SendDoDragAndDropFilesContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId, std::move(filePaths));
                 auto contentAnalysisEventTarget =
                     ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
                 contentAnalysisEventTarget->Dispatch(runnable.forget(),
@@ -8860,6 +8905,53 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                 allowDispatchingEvent = promiseResult.ShouldAllowContent();
                 // This is needed to avoid assertions when the mutex gets destroyed.
                 promiseDoneMutex.Unlock();
+              }
+            }
+            // TODO - what if the clipboard has some allowed stuff and some disallowed stuff? Is
+            // it OK to deny them all?
+            if (allowDispatchingEvent) {
+              const DataTransferItemList* itemList = dataTransfer->Items();
+              // TODO - do these get grouped together? And should they get
+              // grouped with the files too?
+              for (uint32_t i = 0; i < itemList->Length() && allowDispatchingEvent; ++i) {
+                bool found;
+                DataTransferItem* item = itemList->IndexedGetter(0, found);
+                if (item->Kind() == DataTransferItem::KIND_STRING) {
+                  ErrorResult errorResult;
+                  // TODO - is this the right principal?
+                  // TODO - not using this errorResult right
+                  nsCOMPtr<nsIVariant> data = item->Data(
+                      nsContentUtils::GetSystemPrincipal(), errorResult);
+                  nsAutoString stringData;
+                  nsresult rv = data->GetAsAString(stringData);
+                  if (NS_SUCCEEDED(rv)) {
+                    BrowserChild* browserChild =
+                        BrowserChild::GetFrom(presContext->GetDocShell());
+                    layers::LayersId layersId = browserChild->GetLayersId();
+                    Mutex promiseDoneMutex("PresShell::EventHandler");
+                    // TODO there may be a more idiomatic way to do this than to use a CondVar
+                    // with an already-locked Mutex
+                    promiseDoneMutex.Lock();
+                    CondVar promiseDoneCondVar(promiseDoneMutex, "PresShell::EventHandler");
+                    contentanalysis::MaybeContentAnalysisResult promiseResult;
+                    RefPtr<SendDoDragAndDropTextContentAnalysisRunnable> runnable =
+                        new SendDoDragAndDropTextContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId, std::move(stringData));
+                    auto contentAnalysisEventTarget =
+                        ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
+                    contentAnalysisEventTarget->Dispatch(runnable.forget(),
+                                                         nsIEventTarget::DISPATCH_NORMAL);
+
+                    promiseDoneCondVar.Wait();
+                    // TODO - I am concerned here that there could be memory coherency issues
+                    // here, where reading the value of promiseResult might get optimized away
+                    // by the compiler or something. I was hoping to keep promiseResult in an
+                    // Atomic<>, but the type is now too complicated for that (it's not
+                    // trivially copyable, for one thing)
+                    allowDispatchingEvent = promiseResult.ShouldAllowContent();
+                    // This is needed to avoid assertions when the mutex gets destroyed.
+                    promiseDoneMutex.Unlock();
+                  }
+                }
               }
             }
           }
