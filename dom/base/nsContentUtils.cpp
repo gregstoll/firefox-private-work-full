@@ -7832,6 +7832,44 @@ bool nsContentUtils::IPCTransferableDataItemHasKnownFlavor(
   return false;
 }
 
+static nsresult CloneIPCDataTransferBlob(const IPCTransferableDataBlob& source, IPCTransferableDataBlob& dest) {
+  nsresult rv = NS_OK;
+  IPCTransferableDataBlob newBlob;
+  dest.blob().type().Assign(source.blob().type());
+  dest.blob().size() = source.blob().size();
+  dest.blob().blobImplType().Assign(source.blob().blobImplType());
+  switch (source.blob().inputStream().type()) {
+    case mozilla::RemoteLazyStream::TRemoteLazyInputStream: {
+      nsCOMPtr<nsIInputStream> streamCopy;
+      rv = source.blob().inputStream().get_RemoteLazyInputStream()->Clone(
+          getter_AddRefs(streamCopy));
+      NS_ENSURE_SUCCESS(rv, rv);
+      // TODO lifetime?
+      // This scary-looking cast is safe because RemoteLazyInputStream's Clone() method
+      // returns another RemoteLazyInputStream (even though it's typed as an nsIInputStream)
+      dest.blob().inputStream() = reinterpret_cast<RemoteLazyInputStream*>(streamCopy.get());
+      break;
+    }
+    case mozilla::RemoteLazyStream::TIPCStream: {
+      IPC::Message msg(MSG_ROUTING_NONE, 0);
+      IPC::MessageWriter writer(msg);
+      IPC::WriteParam(&writer, source.blob().inputStream().get_IPCStream());
+      IPC::MessageReader reader(msg);
+      bool success = IPC::ReadParam(&reader, &dest.blob().inputStream().get_IPCStream());
+      if (!success) {
+        return NS_ERROR_NO_INTERFACE;
+      }
+      break;
+    }
+    case mozilla::RemoteLazyStream::T__None:
+      // nothing to do here
+      break;
+  }
+  dest.blob().file() = source.blob().file();
+  dest.blob().fileId() = source.blob().fileId();
+  return rv;
+}
+
 nsresult nsContentUtils::CloneIPCTransferable(
   const IPCTransferableData& aSource,
   IPCTransferableData& aDest) {
@@ -7850,12 +7888,41 @@ nsresult nsContentUtils::CloneIPCTransferable(
         newItem->data() = std::move(newString);
         break;
       }
-      case IPCTransferableDataType::TIPCTransferableDataBlob: {
-        const auto& data = item.data().get_IPCTransferableDataBlob();
-        IPCTransferableDataBlob newBlob(data);
-        newItem->data() = std::move(newBlob);
+      case IPCTransferableDataType::TIPCTransferableDataCString: {
+        const auto& data = item.data().get_IPCTransferableDataCString();
+        IPCTransferableDataCString newString(BigBuffer(data.data().AsSpan()));
+        newItem->data() = std::move(newString);
         break;
       }
+      case IPCTransferableDataType::TIPCTransferableDataInputStream: {
+        const auto& data = item.data().get_IPCTransferableDataInputStream();
+        IPCTransferableDataInputStream newStream(BigBuffer(data.data().AsSpan()));
+        newItem->data() = std::move(newStream);
+        break;
+      }
+      case IPCTransferableDataType::TIPCTransferableDataImageContainer: {
+        const auto& data = item.data().get_IPCTransferableDataImageContainer();
+        IPCTransferableDataImageContainer newImageContainer;
+        newImageContainer.data() = BigBuffer(data.data().AsSpan());
+        newImageContainer.width() = data.width();
+        newImageContainer.height() = data.height();
+        newImageContainer.stride() = data.stride();
+        newImageContainer.format() = data.format();
+        newItem->data() = std::move(newImageContainer);
+        break;
+      }
+      case IPCTransferableDataType::TIPCTransferableDataBlob: {
+        const auto& data = item.data().get_IPCTransferableDataBlob();
+        // Set the type correctly, or else getting it in
+        // get_IPCTransferableDataBlob() will fail to validate
+        newItem->data() = IPCTransferableDataBlob();
+        rv = CloneIPCDataTransferBlob(data, newItem->data());
+        NS_ENSURE_SUCCESS(rv, rv);
+        break;
+      }
+      case IPCTransferableDataType::T__None:
+        // Nothing to do
+        break;
     }
   }
   return rv;
