@@ -7851,14 +7851,8 @@ static nsresult CloneIPCDataTransferBlob(const IPCTransferableDataBlob& source, 
       break;
     }
     case mozilla::RemoteLazyStream::TIPCStream: {
-      IPC::Message msg(MSG_ROUTING_NONE, 0);
-      IPC::MessageWriter writer(msg);
-      IPC::WriteParam(&writer, source.blob().inputStream().get_IPCStream());
-      IPC::MessageReader reader(msg);
-      bool success = IPC::ReadParam(&reader, &dest.blob().inputStream().get_IPCStream());
-      if (!success) {
-        return NS_ERROR_NO_INTERFACE;
-      }
+      // This shouldn't happen since we're being called from a content process
+      MOZ_ASSERT(false);
       break;
     }
     case mozilla::RemoteLazyStream::T__None:
@@ -7873,6 +7867,9 @@ static nsresult CloneIPCDataTransferBlob(const IPCTransferableDataBlob& source, 
 nsresult nsContentUtils::CloneIPCTransferable(
   const IPCTransferableData& aSource,
   IPCTransferableData& aDest) {
+  // This method only supports being called from a content process
+  // because of the way it handles IPCTransferableDataBlob.
+  MOZ_ASSERT(XRE_IsContentProcess());
   nsresult rv = NS_OK;
   const nsTArray<IPCTransferableDataItem>& items = aSource.items();
   aDest.items().Clear();

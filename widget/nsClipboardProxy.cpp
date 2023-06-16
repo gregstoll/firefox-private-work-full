@@ -158,7 +158,7 @@ class SendDoClipboardContentAnalysisAsyncRunnable final : public Runnable {
   layers::LayersId mLayersId;
 };
 
-static nsresult CopyIPCDataTransfer(const mozilla::dom::IPCTransferableData& dataTransfer, mozilla::dom::IPCTransferableData& dataTransferCopy) {
+static nsresult CopyIPCTransferableData(const mozilla::dom::IPCTransferableData& dataTransfer, mozilla::dom::IPCTransferableData& dataTransferCopy) {
   return nsContentUtils::CloneIPCTransferable(dataTransfer, dataTransferCopy);
 }
 
@@ -209,10 +209,8 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable,
     CondVar promiseDoneCondVar(promiseDoneMutex, "nsClipboardProxy::GetData");
     contentanalysis::MaybeContentAnalysisResult promiseResult;
 
-    // TODO - this is a very klunky way of making a copy of dataTransfer
-    // (since we need it below)
     IPCTransferableData transferableCopy;
-    rv = CopyIPCDataTransfer(transferable, transferableCopy);
+    rv = CopyIPCTransferableData(transferable, transferableCopy);
     NS_ENSURE_SUCCESS(rv, rv);
     RefPtr<SendDoClipboardContentAnalysisSyncRunnable> runnable =
         new SendDoClipboardContentAnalysisSyncRunnable(promiseDoneCondVar,
@@ -380,10 +378,8 @@ RefPtr<GenericPromise> nsClipboardProxy::AsyncGetData(
               return;
             }
             if (contentAnalysisMightBeActive && browserChild) {
-              // TODO - this is a very klunky way of making a copy of dataTransfer
-              // (since we need it below)
               IPCTransferableData dataTransferCopy1;
-              rv = CopyIPCDataTransfer(dataTransfer, dataTransferCopy1);
+              rv = CopyIPCTransferableData(dataTransfer, dataTransferCopy1);
               if (!NS_SUCCEEDED(rv)) {
                 promise->Reject(rv, __func__);
                 return;
