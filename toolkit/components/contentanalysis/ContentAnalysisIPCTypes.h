@@ -16,6 +16,7 @@ namespace contentanalysis {
 
 enum class NoContentAnalysisResult : uint8_t {
   AGENT_NOT_PRESENT,
+  NO_PARENT_BROWSER,
   ERROR_INVALID_JSON_RESPONSE,
   ERROR_OTHER,
   LAST_VALUE = ERROR_OTHER
@@ -33,8 +34,8 @@ struct MaybeContentAnalysisResult {
 
   bool ShouldAllowContent() const {
     if (value.is<NoContentAnalysisResult>()) {
-      return value.as<NoContentAnalysisResult>() ==
-             NoContentAnalysisResult::AGENT_NOT_PRESENT;
+      NoContentAnalysisResult result = value.as<NoContentAnalysisResult>();
+      return result == NoContentAnalysisResult::AGENT_NOT_PRESENT || result == NoContentAnalysisResult::NO_PARENT_BROWSER;
     }
     int32_t responseCode = value.as<int32_t>();
     return responseCode == nsIContentAnalysisResponse::ALLOW ||

@@ -185,8 +185,6 @@ nsClipboardProxy::GetData(nsITransferable* aTransferable,
   aTransferable->FlavorsTransferableCanImport(types);
 
   IPCTransferableData transferable;
-  ContentChild::GetSingleton()->SendGetClipboard(types, aWhichClipboard,
-                                                 &transferable);
   BrowserChild* browserChild = nullptr;
   if (aSource.is<Document*>()) {
     browserChild =
