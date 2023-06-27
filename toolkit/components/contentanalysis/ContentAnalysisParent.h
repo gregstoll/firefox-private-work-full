@@ -16,7 +16,7 @@
 namespace mozilla {
 namespace contentanalysis {
 class ContentAnalysisParent final : public PContentAnalysisParent {
-  NS_INLINE_DECL_REFCOUNTING(ContentAnalysisParent, final)
+  NS_INLINE_DECL_REFCOUNTING_ONEVENTTARGET(ContentAnalysisParent, final)
   ContentAnalysisParent() {}
 
   mozilla::ipc::IPCResult RecvDoClipboardContentAnalysis(

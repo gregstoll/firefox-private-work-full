@@ -13,7 +13,7 @@
 namespace mozilla {
 namespace contentanalysis {
 class ContentAnalysisChild final : public PContentAnalysisChild {
-  NS_INLINE_DECL_REFCOUNTING(ContentAnalysisChild, final)
+  NS_INLINE_DECL_REFCOUNTING_ONEVENTTARGET(ContentAnalysisChild, final)
 
  private:
   virtual ~ContentAnalysisChild() = default;
