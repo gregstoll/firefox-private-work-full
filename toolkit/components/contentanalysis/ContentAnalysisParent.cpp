@@ -346,7 +346,7 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropTextContentAnaly
       contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
-        new ContentAnalysisPromiseListener(aResolver);
+        new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
     contentAnalysisPromise->AppendNativeHandler(listener);
   } else {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
