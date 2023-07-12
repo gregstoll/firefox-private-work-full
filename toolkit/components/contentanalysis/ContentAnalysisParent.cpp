@@ -24,8 +24,10 @@ class ContentAnalysisPastePromiseListener
     : public mozilla::dom::PromiseNativeHandler {
   NS_DECL_ISUPPORTS
   ContentAnalysisPastePromiseListener(
-      PContentAnalysisParent::DoClipboardContentAnalysisResolver aResolver)
-      : mResolver(aResolver) {}
+      PContentAnalysisParent::DoClipboardContentAnalysisResolver aResolver,
+      mozilla::dom::Promise* aContentAnalysisPromise)
+      : mResolver(aResolver),
+        mContentAnalysisPromise(aContentAnalysisPromise) {}
   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
     if (aValue.isObject()) {
@@ -38,12 +40,14 @@ class ContentAnalysisPastePromiseListener
           double actionNumber = actionValue.toNumber();
           mResolver(contentanalysis::MaybeContentAnalysisResult(
               static_cast<int32_t>(actionNumber)));
+          mContentAnalysisPromise->Release();
           return;
         }
       }
     }
     mResolver(contentanalysis::MaybeContentAnalysisResult(
         NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE));
+    mContentAnalysisPromise->Release();
   }
 
   virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
@@ -51,11 +55,13 @@ class ContentAnalysisPastePromiseListener
     // call to content analysis failed
     mResolver(contentanalysis::MaybeContentAnalysisResult(
         NoContentAnalysisResult::ERROR_OTHER));
+    mContentAnalysisPromise->Release();
   }
 
  private:
   ~ContentAnalysisPastePromiseListener() = default;
   PContentAnalysisParent::DoClipboardContentAnalysisResolver mResolver;
+  mozilla::dom::Promise* mContentAnalysisPromise;
 };
 }  // namespace
 
@@ -115,7 +121,7 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
   trans->Init(nullptr);
 
   rv = nsContentUtils::IPCTransferableDataToTransferable(aData, false, trans,
-                                                     false);
+                                                         false);
   if (NS_FAILED(rv)) {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
         NoContentAnalysisResult::ERROR_OTHER));
@@ -144,11 +150,12 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
       new mozilla::contentanalysis::ContentAnalysisRequest(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text), false,
           std::move(emptyDigest), std::move(documentURIString)));
-  rv = contentAnalysis->AnalyzeContentRequest(
-      contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+  rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
+                                              &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPastePromiseListener> listener =
-        new ContentAnalysisPastePromiseListener(aResolver);
+        new ContentAnalysisPastePromiseListener(aResolver,
+                                                contentAnalysisPromise);
     contentAnalysisPromise->AppendNativeHandler(listener);
   } else {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
