@@ -74,57 +74,64 @@ nsresult LocalFileToDirectoryOrBlob(nsPIDOMWindowInner* aWindow,
 
 class ContentAnalysisPromiseListener : public PromiseNativeHandler {
  public:
-   NS_DECL_ISUPPORTS
-   ContentAnalysisPromiseListener(nsBaseFilePicker* aFilePicker,
-                          nsIFilePickerShownCallback* aCallback, nsIFile* aFile, nsIFilePicker::ResultCode aResult)
+  NS_DECL_ISUPPORTS
+  ContentAnalysisPromiseListener(nsBaseFilePicker* aFilePicker,
+                                 nsIFilePickerShownCallback* aCallback,
+                                 nsIFile* aFile,
+                                 nsIFilePicker::ResultCode aResult,
+                                 mozilla::dom::Promise* aContentAnalysisPromise)
       : mFilePicker(aFilePicker),
         mCallback(aCallback),
         mFile(aFile),
-        mResult(aResult) {}
+        mResult(aResult),
+        mContentAnalysisPromise(aContentAnalysisPromise) {}
 
-   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
-     mozilla::ErrorResult& aRv) override {
-      // TODO synchronization
-      // TODO error checking
-      if (aValue.isObject()) {
-        auto* obj = aValue.toObjectOrNull();
-        // TODO is this handle thing ok?
-        JS::Handle<JSObject*> handle = JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-        JS::RootedValue actionValue(aCx);
-        //JS_HasProperty(aCx, handle, "action", &found);
-        if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
-          if (actionValue.isNumber()) {
-            double actionNumber = actionValue.toNumber();
-            if (actionNumber ==
-                static_cast<double>(
-                    nsIContentAnalysisResponse::BLOCK)) {
-              mFilePicker->RemoveFile(mFile);
-            }
+  virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // TODO synchronization
+    // TODO error checking
+    if (aValue.isObject()) {
+      auto* obj = aValue.toObjectOrNull();
+      // TODO is this handle thing ok?
+      JS::Handle<JSObject*> handle =
+          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+      JS::RootedValue actionValue(aCx);
+      // JS_HasProperty(aCx, handle, "action", &found);
+      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+        if (actionValue.isNumber()) {
+          double actionNumber = actionValue.toNumber();
+          if (actionNumber ==
+              static_cast<double>(nsIContentAnalysisResponse::BLOCK)) {
+            mFilePicker->RemoveFile(mFile);
           }
         }
       }
-      if (mCallback) {
-        mCallback->Done(mResult);
-      }
-   }
-   
-   virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
-                                 mozilla::ErrorResult& aRv) override {
-      // remove this entry
-      // TODO synchronization
-      // TODO error checking
-      mFilePicker->RemoveFile(mFile);
-      if (mCallback) {
-        mCallback->Done(mResult);
-      }
-   }
+    }
+    if (mCallback) {
+      mCallback->Done(mResult);
+    }
+    mContentAnalysisPromise->Release();
+  }
+
+  virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // remove this entry
+    // TODO synchronization
+    // TODO error checking
+    mFilePicker->RemoveFile(mFile);
+    if (mCallback) {
+      mCallback->Done(mResult);
+    }
+    mContentAnalysisPromise->Release();
+  }
 
  private:
-   ~ContentAnalysisPromiseListener() = default;
+  ~ContentAnalysisPromiseListener() = default;
   RefPtr<nsBaseFilePicker> mFilePicker;
   RefPtr<nsIFilePickerShownCallback> mCallback;
   RefPtr<nsIFile> mFile;
   nsIFilePicker::ResultCode mResult;
+  mozilla::dom::Promise* mContentAnalysisPromise;
 };
 
 NS_IMPL_ISUPPORTS0(ContentAnalysisPromiseListener)
@@ -169,8 +176,6 @@ class nsBaseFilePicker::AsyncShowFilePicker : public mozilla::Runnable {
       //nsresult rv = mFilePicker->GetDomFileOrDirectory(getter_AddRefs(tmp));
       nsresult rv = mFilePicker->GetFile(getter_AddRefs(file));
       mozilla::PathString filePath = file->NativePath();
-      RefPtr<ContentAnalysisPromiseListener> listener = new ContentAnalysisPromiseListener(
-          mFilePicker, mCallback, file, result);
 
       nsCOMPtr<nsIContentAnalysis> contentAnalysis =
           mozilla::components::nsIContentAnalysis::Service(&rv);
@@ -210,6 +215,8 @@ class nsBaseFilePicker::AsyncShowFilePicker : public mozilla::Runnable {
                                                   aes.cx(), &promise);
       // TODO - better handling
       if (NS_SUCCEEDED(rv)) {
+        RefPtr<ContentAnalysisPromiseListener> listener = new ContentAnalysisPromiseListener(
+            mFilePicker, mCallback, file, result, promise);
         waitForPromise = true;
         promise->AppendNativeHandler(listener);
       }
