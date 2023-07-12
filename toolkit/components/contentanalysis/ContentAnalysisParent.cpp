@@ -27,7 +27,7 @@ namespace {
 class ContentAnalysisPromiseListener
     : public mozilla::dom::PromiseNativeHandler {
   NS_DECL_ISUPPORTS
-  ContentAnalysisPastePromiseListener(
+  ContentAnalysisPromiseListener(
       PContentAnalysisParent::DoClipboardContentAnalysisResolver aResolver,
       mozilla::dom::Promise* aContentAnalysisPromise)
       : mResolver(aResolver),
@@ -157,8 +157,8 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoClipboardContentAnalysis(
   rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
                                               &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
-    RefPtr<ContentAnalysisPastePromiseListener> listener =
-        new ContentAnalysisPastePromiseListener(aResolver,
+    RefPtr<ContentAnalysisPromiseListener> listener =
+        new ContentAnalysisPromiseListener(aResolver,
                                                 contentAnalysisPromise);
     contentAnalysisPromise->AppendNativeHandler(listener);
   } else {
@@ -269,7 +269,7 @@ mozilla::ipc::IPCResult ContentAnalysisParent::RecvDoDragAndDropContentAnalysis(
       contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
-        new ContentAnalysisPromiseListener(aResolver);
+        new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
     contentAnalysisPromise->AppendNativeHandler(listener);
   } else {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
