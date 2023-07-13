@@ -20,6 +20,41 @@ class ContentAnalysisResponse;
 namespace mozilla {
 namespace contentanalysis {
 
+class ContentAnalysisRequest : public nsIContentAnalysisRequest {
+ public:
+  NS_DECL_THREADSAFE_ISUPPORTS
+  NS_DECL_NSICONTENTANALYSISREQUEST
+
+  ContentAnalysisRequest(unsigned long aAnalysisType, nsAString&& aString,
+                         bool aStringIsFilePath, nsACString&& aSha256Digest,
+                         nsAString&& aUrl);
+
+ private:
+  virtual ~ContentAnalysisRequest() = default;
+
+  // See nsIContentAnalysisRequest for values
+  unsigned long mAnalysisType;
+
+  // Text content to analyze.  Only one of textContent or filePath is defined.
+  nsString mTextContent;
+
+  // Name of file to analyze.  Only one of textContent or filePath is defined.
+  nsString mFilePath;
+
+  // The URL containing the file download/upload or to which web content is
+  // being uploaded.
+  nsString mUrl;
+
+  // Sha256 digest of file.
+  nsCString mSha256Digest;
+
+  // URLs involved in the download.
+  nsTArray<RefPtr<nsIClientDownloadResource>> mResources;
+
+  // Email address of user.
+  nsString mEmail;
+};
+
 class ContentAnalysis : public nsIContentAnalysis {
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
