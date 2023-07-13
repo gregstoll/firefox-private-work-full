@@ -16,6 +16,8 @@ UNIFIED_SOURCES += [
     "../../../third_party/content_analysis_sdk/browser/src/client_base.cc",
 ]
 
+EXPORTS += ["ContentAnalysis.h"]
+
 if CONFIG["OS_ARCH"] == "WINNT":
     UNIFIED_SOURCES += [
         "../../../third_party/content_analysis_sdk/browser/src/client_win.cc",
