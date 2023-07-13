@@ -150,7 +150,7 @@ void Clipboard::ReadRequest::Answer() {
 
       trans->Init(nullptr);
       trans->AddDataFlavor(kTextMime);
-      clipboardService->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
+      clipboardService->AsyncGetData(trans, nsIClipboard::kGlobalClipboard, AsVariant(owner->GetDoc()))
           ->Then(
               GetMainThreadSerialEventTarget(), __func__,
               /* resolve */

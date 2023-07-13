@@ -90,6 +90,8 @@
 #include "mozilla/TelemetryIPC.h"
 #include "mozilla/Unused.h"
 #include "mozilla/WebBrowserPersistDocumentParent.h"
+#include "mozilla/contentanalysis/PContentAnalysisParent.h"
+#include "mozilla/contentanalysis/PContentAnalysisChild.h"
 #include "mozilla/devtools/HeapSnapshotTempFileHelperParent.h"
 #include "mozilla/dom/BlobURLProtocolHandler.h"
 #include "mozilla/dom/BrowserHost.h"
@@ -326,6 +328,17 @@
 
 #include "nsIToolkitProfileService.h"
 #include "nsIToolkitProfile.h"
+
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
+#include "nsGlobalWindowInner.h"
+#include "mozilla/Components.h"
+#include "mozilla/dom/AutoEntryScript.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
+#include "mozilla/dom/Document.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsISupportsPrimitives.h"
 
 static NS_DEFINE_CID(kCClipboardCID, NS_CLIPBOARD_CID);
 
@@ -1699,6 +1712,17 @@ void ContentParent::Init() {
   RefPtr<GeckoMediaPluginServiceParent> gmps(
       GeckoMediaPluginServiceParent::GetSingleton());
   gmps->UpdateContentProcessGMPCapabilities(this);
+
+  {
+    Endpoint<contentanalysis::PContentAnalysisParent> parentEnd;
+    Endpoint<contentanalysis::PContentAnalysisChild> childEnd;
+    Unused << NS_WARN_IF(
+        NS_FAILED(contentanalysis::PContentAnalysis::CreateEndpoints(
+            base::GetCurrentProcId(), OtherPid(), &parentEnd, &childEnd)));
+    mContentAnalysisParent = new contentanalysis::ContentAnalysisParent();
+    Unused << NS_WARN_IF(!parentEnd.Bind(mContentAnalysisParent));
+    Unused << NS_WARN_IF(!SendCreateContentAnalysisChild(std::move(childEnd)));
+  }
 
   // Flush any pref updates that happened during launch and weren't
   // included in the blobs set up in BeginSubprocessLaunch.
@@ -3508,7 +3532,7 @@ mozilla::ipc::IPCResult ContentParent::RecvGetClipboard(
 
   // Get data from clipboard
   nsCOMPtr<nsITransferable> trans = result.unwrap();
-  clipboard->GetData(trans, aWhichClipboard);
+  clipboard->GetData(trans, aWhichClipboard, AsVariant(mozilla::Nothing()));
 
   nsContentUtils::TransferableToIPCTransferableData(
       trans, aTransferableData, true /* aInSyncMessage */, this);
@@ -3569,6 +3593,7 @@ mozilla::ipc::IPCResult ContentParent::RecvGetExternalClipboardFormats(
 
 mozilla::ipc::IPCResult ContentParent::RecvGetClipboardAsync(
     nsTArray<nsCString>&& aTypes, const int32_t& aWhichClipboard,
+    PBrowserParent* aBrowser,
     GetClipboardAsyncResolver&& aResolver) {
   nsresult rv;
   // Retrieve clipboard
@@ -3586,17 +3611,20 @@ mozilla::ipc::IPCResult ContentParent::RecvGetClipboardAsync(
   }
 
   // Get data from clipboard
+  BrowserParent* parent = nullptr;
+  if (aBrowser) {
+    parent = BrowserParent::GetFrom(aBrowser);
+  }
   nsCOMPtr<nsITransferable> trans = result.unwrap();
-  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
-      ->Then(
-          GetMainThreadSerialEventTarget(), __func__,
-          [trans, aResolver,
-           self = RefPtr{this}](GenericPromise::ResolveOrRejectValue&& aValue) {
-            IPCTransferableData ipcTransferableData;
-            nsContentUtils::TransferableToIPCTransferableData(
-                trans, &ipcTransferableData, false /* aInSyncMessage */, self);
-            aResolver(std::move(ipcTransferableData));
-          });
+  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard, AsVariant(parent))
+      ->Then(GetMainThreadSerialEventTarget(), __func__,
+             [trans, aResolver, self = RefPtr{this}](
+                 GenericPromise::ResolveOrRejectValue&& aValue) {
+              IPCTransferableData ipcTransferableData;
+              nsContentUtils::TransferableToIPCTransferableData(
+                  trans, &ipcTransferableData, false /* aInSyncMessage */, self);
+              aResolver(std::move(ipcTransferableData));
+             });
   return IPC_OK();
 }
 

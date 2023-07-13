@@ -8,6 +8,7 @@
 #define mozilla_dom_ContentChild_h
 
 #include "mozilla/Atomics.h"
+#include "mozilla/contentanalysis/ContentAnalysisChild.h"
 #include "mozilla/dom/BlobImpl.h"
 #include "mozilla/dom/GetFilesHelper.h"
 #include "mozilla/dom/PContentChild.h"
@@ -120,6 +121,14 @@ class ContentChild final : public PContentChild,
 
   static ContentChild* GetSingleton() { return sSingleton; }
 
+  RefPtr<contentanalysis::ContentAnalysisChild> GetContentAnalysisChild() {
+    return mContentAnalysisChild;
+  }
+
+  RefPtr<nsISerialEventTarget> GetContentAnalysisEventTarget() {
+    return mContentAnalysisEventTarget;
+  }
+
   const AppInfo& GetAppInfo() { return mAppInfo; }
 
   void SetProcessName(const nsACString& aName,
@@ -158,6 +167,9 @@ class ContentChild final : public PContentChild,
 
   mozilla::ipc::IPCResult RecvInitProcessHangMonitor(
       Endpoint<PProcessHangMonitorChild>&& aHangMonitor);
+
+  mozilla::ipc::IPCResult RecvCreateContentAnalysisChild(
+      Endpoint<PContentAnalysisChild>&& aContentAnalysisChild);
 
   mozilla::ipc::IPCResult RecvInitRendering(
       Endpoint<PCompositorManagerChild>&& aCompositor,
@@ -853,6 +865,8 @@ class ContentChild final : public PContentChild,
   RefPtr<ipc::SharedMap> mSharedData;
 
   RefPtr<ChildProfilerController> mProfilerController;
+  RefPtr<contentanalysis::ContentAnalysisChild> mContentAnalysisChild;
+  RefPtr<nsISerialEventTarget> mContentAnalysisEventTarget;
 
 #if defined(XP_MACOSX) && defined(MOZ_SANDBOX)
   nsCOMPtr<nsIFile> mProfileDir;

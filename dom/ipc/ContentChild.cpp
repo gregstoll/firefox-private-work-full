@@ -642,9 +642,29 @@ ContentChild::ContentChild()
                            */
 #endif
 
+class DestroyContentAnalysisRunnable final : public Runnable {
+ public:
+  DestroyContentAnalysisRunnable(contentanalysis::ContentAnalysisChild* aChild)
+      : Runnable("DestroyContentAnalysisRunnable"), mChild(aChild) {}
+
+  NS_IMETHOD Run() override {
+    mChild->Release();
+    return NS_OK;
+  }
+
+ private:
+  ~DestroyContentAnalysisRunnable() override = default;
+  contentanalysis::ContentAnalysisChild* mChild;
+};
+
 ContentChild::~ContentChild() {
   profiler_remove_state_change_callback(reinterpret_cast<uintptr_t>(this));
-
+  contentanalysis::ContentAnalysisChild* contentAnalysisChild = nullptr;
+  mContentAnalysisChild.forget(&contentAnalysisChild);
+  RefPtr<DestroyContentAnalysisRunnable> runnable =
+      new DestroyContentAnalysisRunnable(contentAnalysisChild);
+  mContentAnalysisEventTarget->Dispatch(runnable.forget(),
+                                        nsIEventTarget::DISPATCH_NORMAL);
 #ifndef NS_FREE_PERMANENT_DATA
   MOZ_CRASH("Content Child shouldn't be destroyed.");
 #endif
@@ -1529,6 +1549,46 @@ mozilla::ipc::IPCResult ContentChild::RecvGMPsChanged(
 mozilla::ipc::IPCResult ContentChild::RecvInitProcessHangMonitor(
     Endpoint<PProcessHangMonitorChild>&& aHangMonitor) {
   CreateHangMonitorChild(std::move(aHangMonitor));
+  return IPC_OK();
+}
+
+class CreateContentAnalysisRunnable final : public Runnable {
+ public:
+  CreateContentAnalysisRunnable(
+      RefPtr<contentanalysis::ContentAnalysisChild>& aChild,
+      Endpoint<contentanalysis::PContentAnalysisChild>& aEndpoint)
+      : Runnable("CreateContentAnalysisRunnable"),
+        mChild(aChild),
+        mEndpoint(aEndpoint) {}
+
+  NS_IMETHOD Run() override {
+    mChild = new contentanalysis::ContentAnalysisChild();
+    if (!mEndpoint.Bind(mChild)) {
+      MOZ_CRASH("Bind failed in CreateContentAnalysisRunnable::Run");
+    }
+    return NS_OK;
+  }
+
+ private:
+  ~CreateContentAnalysisRunnable() override = default;
+  RefPtr<contentanalysis::ContentAnalysisChild>& mChild;
+  Endpoint<contentanalysis::PContentAnalysisChild>& mEndpoint;
+};
+
+mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
+    Endpoint<PContentAnalysisChild>&& aEndpoint) {
+  nsresult rv = NS_CreateBackgroundTaskQueue(
+      "ContentAnalysis", mContentAnalysisEventTarget.StartAssignment());
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return IPC_FAIL(this,
+                    "Failed to create task queue for ContentAnalysisChild");
+  }
+
+  RefPtr<CreateContentAnalysisRunnable> runnable =
+      new CreateContentAnalysisRunnable(mContentAnalysisChild, aEndpoint);
+  NS_DispatchAndSpinEventLoopUntilComplete(
+      "ContentChild::RecvCreateContentAnalysisChild"_ns,
+      mContentAnalysisEventTarget, runnable.forget());
   return IPC_OK();
 }
 

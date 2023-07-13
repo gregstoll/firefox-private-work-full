@@ -96,7 +96,8 @@ void ClipboardItem::ItemEntry::LoadDataFromSystemClipboard(
 
   mIsLoadingData = true;
   nsCOMPtr<nsITransferable> trans(&aTransferable);
-  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
+  // TODO
+  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard, AsVariant(Nothing()))
       ->Then(
           GetMainThreadSerialEventTarget(), __func__,
           /* resolved */
