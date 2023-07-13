@@ -53,7 +53,6 @@ UNIFIED_SOURCES += [
     "HTMLEditor.cpp",
     "HTMLEditorCommands.cpp",
     "HTMLEditorController.cpp",
-    "HTMLEditorDataTransfer.cpp",
     "HTMLEditorDeleteHandler.cpp",
     "HTMLEditorDocumentCommands.cpp",
     "HTMLEditorEventListener.cpp",
@@ -78,6 +77,10 @@ UNIFIED_SOURCES += [
     "TextEditorDataTransfer.cpp",
     "TextEditSubActionHandler.cpp",
     "WSRunObject.cpp",
+]
+
+SOURCES += [
+    "HTMLEditorDataTransfer.cpp",  # mozilla::InputType vs mozilla::dom::InputType conflict
 ]
 
 LOCAL_INCLUDES += [

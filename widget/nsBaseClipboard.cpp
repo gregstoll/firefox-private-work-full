@@ -8,6 +8,8 @@
 #include "nsIClipboardOwner.h"
 #include "nsError.h"
 #include "nsXPCOM.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/Document.h"
 
 using mozilla::GenericPromise;
 using mozilla::LogLevel;
@@ -153,9 +155,9 @@ NS_IMPL_ISUPPORTS_INHERITED0(nsBaseClipboard, ClipboardSetDataHelper)
  * Sets the transferable object
  *
  */
-NS_IMETHODIMP nsBaseClipboard::SetData(nsITransferable* aTransferable,
-                                       nsIClipboardOwner* anOwner,
-                                       int32_t aWhichClipboard) {
+NS_IMETHODIMP nsBaseClipboard::SetData(
+    nsITransferable* aTransferable, nsIClipboardOwner* anOwner,
+    int32_t aWhichClipboard) {
   NS_ASSERTION(aTransferable, "clipboard given a null transferable");
 
   CLIPBOARD_LOG("%s", __FUNCTION__);
@@ -198,8 +200,8 @@ NS_IMETHODIMP nsBaseClipboard::SetData(nsITransferable* aTransferable,
  * Gets the transferable object
  *
  */
-NS_IMETHODIMP nsBaseClipboard::GetData(nsITransferable* aTransferable,
-                                       int32_t aWhichClipboard) {
+NS_IMETHODIMP nsBaseClipboard::GetData(
+    nsITransferable* aTransferable, int32_t aWhichClipboard) {
   NS_ASSERTION(aTransferable, "clipboard given a null transferable");
 
   CLIPBOARD_LOG("%s", __FUNCTION__);
@@ -210,8 +212,9 @@ NS_IMETHODIMP nsBaseClipboard::GetData(nsITransferable* aTransferable,
     return NS_ERROR_FAILURE;
   }
 
-  if (aTransferable)
+  if (aTransferable) {
     return GetNativeClipboardData(aTransferable, aWhichClipboard);
+  }
 
   return NS_ERROR_FAILURE;
 }
