@@ -667,6 +667,10 @@ class BrowserChild final : public nsMessageManagerScriptExecutor,
           ContentBlockingNotifier::StorageAccessPermissionGrantedReason>&
           aReason);
 
+  bool CheckClipboardWithContentAnalysisSync(const IPCTransferableData& transferable);
+  void CheckClipboardWithContentAnalysis(
+    const IPCTransferableData& transferable, RefPtr<GenericPromise::Private> aPromise);
+
  protected:
   virtual ~BrowserChild();
 

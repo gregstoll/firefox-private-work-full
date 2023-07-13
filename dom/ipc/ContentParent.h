@@ -1004,6 +1004,7 @@ class ContentParent final : public PContentParent,
 
   mozilla::ipc::IPCResult RecvGetClipboardAsync(
       nsTArray<nsCString>&& aTypes, const int32_t& aWhichClipboard,
+      PBrowserParent* aBrowser,
       GetClipboardAsyncResolver&& aResolver);
 
   already_AddRefed<PClipboardWriteRequestParent>

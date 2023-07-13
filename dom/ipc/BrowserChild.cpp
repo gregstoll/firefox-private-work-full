@@ -31,6 +31,7 @@
 #include "mozilla/AsyncEventDispatcher.h"
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/ClearOnShutdown.h"
+#include "mozilla/Components.h"
 #include "mozilla/EventForwards.h"
 #include "mozilla/EventListenerManager.h"
 #include "mozilla/HoldDropJSObjects.h"
@@ -46,6 +47,7 @@
 #include "mozilla/ResultExtensions.h"
 #include "mozilla/ScopeExit.h"
 #include "mozilla/Services.h"
+#include "mozilla/SpinEventLoopUntil.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_fission.h"
 #include "mozilla/StaticPtr.h"
@@ -3728,6 +3730,106 @@ BrowserChild::ContentTransformsReceived(JSContext* aCx,
   MOZ_ASSERT(globalObject == mContentTransformPromise->GetGlobalObject());
   NS_IF_ADDREF(*aPromise = mContentTransformPromise);
   return rv.StealNSResult();
+}
+
+bool BrowserChild::CheckClipboardWithContentAnalysisSync(
+    const IPCTransferableData& transferable) {
+  // Skip this possibly expensive stuff if content analysis is guaranteed to
+  // not be active. Note that checking whether it is active for sure requires
+  // being in the parent process since it has to be able to check the pipe.
+  // But this will help us avoid calling into the parent process almost all
+  // of the time.
+  nsresult rv;
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      components::nsIContentAnalysis::Service(&rv);
+  NS_ENSURE_SUCCESS(rv, false);
+
+  bool contentAnalysisMightBeActive = false;
+  rv = contentAnalysis->GetMightBeActive(&contentAnalysisMightBeActive);
+  NS_ENSURE_SUCCESS(rv, false);
+
+  if (!contentAnalysisMightBeActive) {
+    // Always allow if content analysis is not active.
+    return true;
+  }
+
+  IPCTransferableData transferableCopy;
+  rv = nsContentUtils::CloneIPCTransferable(transferable, transferableCopy);
+  NS_ENSURE_SUCCESS(rv, false);
+
+  Maybe<bool> result;
+  SendDoClipboardContentAnalysis(std::move(transferableCopy))
+      ->Then(
+          GetCurrentSerialEventTarget(), __func__,
+          /* resolve */
+          [&result](const contentanalysis::MaybeContentAnalysisResult& aResult) {
+            result = Some(aResult.ShouldAllowContent());
+          },
+          /* reject */
+          [&result](mozilla::ipc::ResponseRejectReason aReason) {
+            result = Some(false);
+          });
+
+  SpinEventLoopUntil("CheckClipboardWithContentAnalysisSync"_ns,
+    [&result]() -> bool {
+      return result.isSome();
+    });
+
+  return result.value();
+}
+
+void BrowserChild::CheckClipboardWithContentAnalysis(
+    const IPCTransferableData& transferable, RefPtr<GenericPromise::Private> aPromise) {
+  // Skip this possibly expensive stuff if content analysis is guaranteed to
+  // not be active. Note that checking whether it is active for sure requires
+  // being in the parent process since it has to be able to check the pipe.
+  // But this will help us avoid calling into the parent process almost all
+  // of the time.
+  nsresult rv;
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      components::nsIContentAnalysis::Service(&rv);
+  if (!NS_SUCCEEDED(rv)) {
+    aPromise->Reject(rv, __func__);
+    return;
+  }
+
+  bool contentAnalysisMightBeActive = false;
+  rv = contentAnalysis->GetMightBeActive(&contentAnalysisMightBeActive);
+  if (!NS_SUCCEEDED(rv)) {
+    aPromise->Reject(rv, __func__);
+    return;
+  }
+
+  if (!contentAnalysisMightBeActive) {
+    // Always allow if content analysis is not active.
+    aPromise->Resolve(true, __func__);
+    return;
+  }
+
+  IPCTransferableData transferableCopy;
+  rv = nsContentUtils::CloneIPCTransferable(transferable, transferableCopy);
+  if (!NS_SUCCEEDED(rv)) {
+    aPromise->Reject(rv, __func__);
+    return;
+  }
+
+  SendDoClipboardContentAnalysis(std::move(transferableCopy))
+      ->Then(
+          GetCurrentSerialEventTarget(), __func__,
+          /* resolve */
+          [aPromise](const contentanalysis::MaybeContentAnalysisResult& result) {
+            if (result.ShouldAllowContent()) {
+              aPromise->Resolve(true, __func__);
+            } else {
+              // TODO: better codes?
+              aPromise->Reject(NS_ERROR_CONTENT_BLOCKED, __func__);
+            }
+          },
+          /* reject */
+          [aPromise](mozilla::ipc::ResponseRejectReason aReason) {
+              // TODO: better codes?
+            aPromise->Reject(NS_ERROR_FAILURE, __func__);
+          });
 }
 
 BrowserChildMessageManager::BrowserChildMessageManager(

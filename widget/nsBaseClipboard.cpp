@@ -9,6 +9,8 @@
 #include "nsIClipboardOwner.h"
 #include "nsError.h"
 #include "nsXPCOM.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/Document.h"
 
 using mozilla::GenericPromise;
 using mozilla::LogLevel;
@@ -154,9 +156,9 @@ NS_IMPL_ISUPPORTS_INHERITED0(nsBaseClipboard, ClipboardSetDataHelper)
  * Sets the transferable object
  *
  */
-NS_IMETHODIMP nsBaseClipboard::SetData(nsITransferable* aTransferable,
-                                       nsIClipboardOwner* anOwner,
-                                       int32_t aWhichClipboard) {
+NS_IMETHODIMP nsBaseClipboard::SetData(
+    nsITransferable* aTransferable, nsIClipboardOwner* anOwner,
+    int32_t aWhichClipboard) {
   NS_ASSERTION(aTransferable, "clipboard given a null transferable");
 
   CLIPBOARD_LOG("%s: clipboard=%d", __FUNCTION__, aWhichClipboard);

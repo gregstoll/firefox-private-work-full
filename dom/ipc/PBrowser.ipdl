@@ -109,6 +109,7 @@ using mozilla::NativeKeyBindingsType from "mozilla/NativeKeyBindingsType.h";
 using mozilla::StyleImageRendering from "mozilla/ServoStyleConsts.h";
 [MoveOnly] using class mozilla::ipc::BigBuffer from "mozilla/ipc/BigBuffer.h";
 using nsIFilePicker::Mode from "nsIFilePicker.h";
+using mozilla::contentanalysis::MaybeContentAnalysisResult from "mozilla/contentanalysis/ContentAnalysisIPCTypes.h";
 
 namespace mozilla {
 namespace dom {
@@ -1001,6 +1002,9 @@ parent:
      */
     async NewWindowGlobal(ManagedEndpoint<PWindowGlobalParent> aEndpoint,
                           WindowGlobalInit aInit);
+
+    async DoClipboardContentAnalysis(IPCTransferableData data)
+        returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
 
 /*
  * FIXME: write protocol!
