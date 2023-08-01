@@ -35,6 +35,13 @@ XPCOMUtils.defineLazyServiceGetter(
   Ci.nsIExternalHelperAppService
 );
 
+XPCOMUtils.defineLazyServiceGetter(
+  lazy,
+  "gContentAnalysis",
+  "@mozilla.org/contentanalysis;1",
+  Ci.nsIContentAnalysis
+);
+
 Integration.downloads.defineESModuleGetter(
   lazy,
   "DownloadIntegration",
@@ -322,6 +329,20 @@ Download.prototype = {
    */
   _launchedFromPanel: false,
 
+  contentAnalysis: {
+    INITIAL: 0,
+    RUNNING: 1,
+    FINISHED: 2,
+
+    state: 0,
+
+    /**
+     * Action to take based on the content analysis request.  See
+     * nsIContentAnalysisAcknowledgement.
+     */
+    result: null,
+  },
+
   /**
    * Starts the download for the first time, or restarts a download that failed
    * or has been canceled.
@@ -386,6 +407,9 @@ Download.prototype = {
     this.totalBytes = 0;
     this.currentBytes = 0;
     this.startTime = new Date();
+    this.contentAnalysis.state = this.contentAnalysis.INITIAL;
+    this.contentAnalysis.result =
+      Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED;
 
     // Create a new deferred object and an associated promise before starting
     // the actual download.  We store it on the download as the current attempt.
@@ -515,6 +539,116 @@ Download.prototype = {
 
             // Cancellation exceptions will be changed in the catch block below.
             throw new DownloadError();
+          }
+
+          if (lazy.gContentAnalysis.isActive) {
+            let resources = [
+              {
+                url: this.source.url,
+                type: Ci.nsIClientDownloadResource.DOWNLOAD_URL,
+              },
+            ];
+
+            let redirects = this.saver.getRedirects();
+            if (redirects) {
+              for (let redirect of redirects) {
+                resources.push({
+                  url: redirect.uri,
+                  type: Ci.nsIClientDownloadResource.DOWNLOAD_REDIRECT,
+                });
+              }
+            }
+
+            // source.referrerInfo is a string or nsIReferrerInfo that
+            // represents the download referrer.  May be null.
+            if (this.source.referrerInfo) {
+              resources.push({
+                url: isString(this.source.referrerInfo)
+                  ? this.source.referrerInfo
+                  : this.source.referrerInfo.originalReferrer.spec,
+                type: Ci.nsIClientDownloadResource.TAB_URL,
+              });
+            }
+
+            this.contentAnalysis.state = this.contentAnalysis.RUNNING;
+            this._notifyChange();
+
+            let promise = lazy.gContentAnalysis.AnalyzeContentRequest({
+              analysisType: Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
+              resources,
+              url: this.source.url,
+              filePath: this.target.path,
+              // sha256Digest: not set for downloads,
+            });
+            if (promise) {
+              await promise.then(
+                response => {
+                  let finalAction = Ci.nsIContentAnalysisAcknowledgement.ALLOW;
+                  let exception = null;
+                  switch (response.action) {
+                    case Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED:
+                      exception = new DownloadError({
+                        becauseContentAnalysisFailure: true,
+                      });
+                      finalAction =
+                        Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.ALLOW:
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.ALLOW;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.REPORT_ONLY:
+                      // TODO: UI
+                      console.info(
+                        `Report from content analysis for ${this.source.url}`
+                      );
+                      finalAction =
+                        Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.WARN:
+                      // TODO: UI
+                      console.warn(
+                        `Warning from content analysis for ${this.source.url}`
+                      );
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.WARN;
+                      break;
+                    case Ci.nsIContentAnalysisResponse.BLOCK:
+                      // TODO: UI
+                      exception = new DownloadError({
+                        becauseBlockedByContentAnalysis: true,
+                      });
+                      finalAction = Ci.nsIContentAnalysisAcknowledgement.BLOCK;
+                      break;
+                  }
+
+                  response.Acknowledge({
+                    result: Ci.nsIContentAnalysisAcknowledgement.SUCCESS,
+                    finalAction,
+                  });
+
+                  this.contentAnalysis.state = this.contentAnalysis.FINISHED;
+                  this.contentAnalysis.result = finalAction;
+                  this._notifyChange();
+
+                  if (exception) {
+                    return this.saver.removeData(true).then(() => {
+                      throw exception;
+                    });
+                  }
+                },
+                failure => {
+                  return this.saver.removeData(true).then(() => {
+                    throw new DownloadError({
+                      becauseContentAnalysisFailure: true,
+                    });
+                  });
+                }
+              );
+            }
+
+            if (this.contentAnalysis.state != this.contentAnalysis.FINISHED) {
+              this.contentAnalysis.state = this.contentAnalysis.FINISHED;
+              this._notifyChange();
+            }
           }
 
           // Update the status properties for a successful download.
@@ -1841,7 +1975,9 @@ export var DownloadError = function (aProperties) {
   } else if (
     aProperties.becauseBlocked ||
     aProperties.becauseBlockedByParentalControls ||
-    aProperties.becauseBlockedByReputationCheck
+    aProperties.becauseBlockedByReputationCheck ||
+    aProperties.becauseContentAnalysisFailure ||
+    aProperties.becauseBlockedByContentAnalysis
   ) {
     this.message = "Download blocked.";
   } else {
@@ -1869,6 +2005,12 @@ export var DownloadError = function (aProperties) {
     this.becauseBlocked = true;
     this.becauseBlockedByReputationCheck = true;
     this.reputationCheckVerdict = aProperties.reputationCheckVerdict || "";
+  } else if (aProperties.becauseBlockedByContentAnalysis) {
+    this.becauseBlocked = true;
+    this.becauseBlockedByContentAnalysis = true;
+  } else if (aProperties.becauseContentAnalysisFailure) {
+    this.becauseBlocked = true;
+    this.becauseContentAnalysisFailure = true;
   } else if (aProperties.becauseBlocked) {
     this.becauseBlocked = true;
   }
@@ -1927,6 +2069,17 @@ DownloadError.prototype = {
   becauseBlockedByReputationCheck: false,
 
   /**
+   * Indicates the download was blocked by a local content analysis tool.
+   */
+  becauseBlockedByContentAnalysis: false,
+
+  /**
+   * Indicates the download was blocked due to an error in a local content
+   * analysis tool.
+   */
+  becauseContentAnalysisFailure: false,
+
+  /**
    * If becauseBlockedByReputationCheck is true, indicates the detailed reason
    * why the download was blocked, according to the "BLOCK_VERDICT_" constants.
    *
@@ -1956,6 +2109,8 @@ DownloadError.prototype = {
       becauseBlocked: this.becauseBlocked,
       becauseBlockedByParentalControls: this.becauseBlockedByParentalControls,
       becauseBlockedByReputationCheck: this.becauseBlockedByReputationCheck,
+      becauseBlockedByContentAnalysis: this.becauseBlockedByContentAnalysis,
+      becauseContentAnalysisFailure: this.becauseContentAnalysisFailure,
       reputationCheckVerdict: this.reputationCheckVerdict,
     };
 
@@ -1986,6 +2141,8 @@ DownloadError.fromSerializable = function (aSerializable) {
       property != "becauseBlocked" &&
       property != "becauseBlockedByParentalControls" &&
       property != "becauseBlockedByReputationCheck" &&
+      property != "becauseBlockedByContentAnalysis" &&
+      property != "becauseContentAnalysisFailure" &&
       property != "reputationCheckVerdict"
   );
 
