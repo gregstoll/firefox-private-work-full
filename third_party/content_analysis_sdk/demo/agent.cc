@@ -49,7 +49,6 @@ ParseToBlock(const std::string toBlock) {
 }
 
 bool ParseCommandLine(int argc, char* argv[]) {
-  bool setCustomPipeName = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg.find(kArgUserSpecific) == 0) {

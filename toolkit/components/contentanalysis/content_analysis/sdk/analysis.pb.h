@@ -71,6 +71,9 @@ extern ContentAnalysisCancelRequestsDefaultTypeInternal _ContentAnalysisCancelRe
 class ContentAnalysisRequest;
 struct ContentAnalysisRequestDefaultTypeInternal;
 extern ContentAnalysisRequestDefaultTypeInternal _ContentAnalysisRequest_default_instance_;
+class ContentAnalysisRequest_PrintData;
+struct ContentAnalysisRequest_PrintDataDefaultTypeInternal;
+extern ContentAnalysisRequest_PrintDataDefaultTypeInternal _ContentAnalysisRequest_PrintData_default_instance_;
 class ContentAnalysisResponse;
 struct ContentAnalysisResponseDefaultTypeInternal;
 extern ContentAnalysisResponseDefaultTypeInternal _ContentAnalysisResponse_default_instance_;
@@ -83,6 +86,9 @@ extern ContentAnalysisResponse_Result_TriggeredRuleDefaultTypeInternal _ContentA
 class ContentMetaData;
 struct ContentMetaDataDefaultTypeInternal;
 extern ContentMetaDataDefaultTypeInternal _ContentMetaData_default_instance_;
+class ContentMetaData_PrintMetadata;
+struct ContentMetaData_PrintMetadataDefaultTypeInternal;
+extern ContentMetaData_PrintMetadataDefaultTypeInternal _ContentMetaData_PrintMetadata_default_instance_;
 }  // namespace sdk
 }  // namespace content_analysis
 PROTOBUF_NAMESPACE_OPEN
@@ -95,14 +101,36 @@ template<> ::content_analysis::sdk::ClientMetadata_Browser* Arena::CreateMaybeMe
 template<> ::content_analysis::sdk::ContentAnalysisAcknowledgement* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentAnalysisAcknowledgement>(Arena*);
 template<> ::content_analysis::sdk::ContentAnalysisCancelRequests* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentAnalysisCancelRequests>(Arena*);
 template<> ::content_analysis::sdk::ContentAnalysisRequest* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentAnalysisRequest>(Arena*);
+template<> ::content_analysis::sdk::ContentAnalysisRequest_PrintData* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentAnalysisRequest_PrintData>(Arena*);
 template<> ::content_analysis::sdk::ContentAnalysisResponse* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentAnalysisResponse>(Arena*);
 template<> ::content_analysis::sdk::ContentAnalysisResponse_Result* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentAnalysisResponse_Result>(Arena*);
 template<> ::content_analysis::sdk::ContentAnalysisResponse_Result_TriggeredRule* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentAnalysisResponse_Result_TriggeredRule>(Arena*);
 template<> ::content_analysis::sdk::ContentMetaData* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentMetaData>(Arena*);
+template<> ::content_analysis::sdk::ContentMetaData_PrintMetadata* Arena::CreateMaybeMessage<::content_analysis::sdk::ContentMetaData_PrintMetadata>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
 namespace content_analysis {
 namespace sdk {
 
+enum ContentMetaData_PrintMetadata_PrinterType : int {
+  ContentMetaData_PrintMetadata_PrinterType_UNKNOWN = 0,
+  ContentMetaData_PrintMetadata_PrinterType_CLOUD = 1,
+  ContentMetaData_PrintMetadata_PrinterType_LOCAL = 2
+};
+bool ContentMetaData_PrintMetadata_PrinterType_IsValid(int value);
+constexpr ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata_PrinterType_PrinterType_MIN = ContentMetaData_PrintMetadata_PrinterType_UNKNOWN;
+constexpr ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata_PrinterType_PrinterType_MAX = ContentMetaData_PrintMetadata_PrinterType_LOCAL;
+constexpr int ContentMetaData_PrintMetadata_PrinterType_PrinterType_ARRAYSIZE = ContentMetaData_PrintMetadata_PrinterType_PrinterType_MAX + 1;
+
+const std::string& ContentMetaData_PrintMetadata_PrinterType_Name(ContentMetaData_PrintMetadata_PrinterType value);
+template<typename T>
+inline const std::string& ContentMetaData_PrintMetadata_PrinterType_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, ContentMetaData_PrintMetadata_PrinterType>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function ContentMetaData_PrintMetadata_PrinterType_Name.");
+  return ContentMetaData_PrintMetadata_PrinterType_Name(static_cast<ContentMetaData_PrintMetadata_PrinterType>(enum_t_value));
+}
+bool ContentMetaData_PrintMetadata_PrinterType_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ContentMetaData_PrintMetadata_PrinterType* value);
 enum ClientDownloadRequest_ResourceType : int {
   ClientDownloadRequest_ResourceType_DOWNLOAD_URL = 0,
   ClientDownloadRequest_ResourceType_DOWNLOAD_REDIRECT = 1,
@@ -234,6 +262,196 @@ bool AnalysisConnector_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, AnalysisConnector* value);
 // ===================================================================
 
+class ContentMetaData_PrintMetadata final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:content_analysis.sdk.ContentMetaData.PrintMetadata) */ {
+ public:
+  inline ContentMetaData_PrintMetadata() : ContentMetaData_PrintMetadata(nullptr) {}
+  ~ContentMetaData_PrintMetadata() override;
+  explicit PROTOBUF_CONSTEXPR ContentMetaData_PrintMetadata(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ContentMetaData_PrintMetadata(const ContentMetaData_PrintMetadata& from);
+  ContentMetaData_PrintMetadata(ContentMetaData_PrintMetadata&& from) noexcept
+    : ContentMetaData_PrintMetadata() {
+    *this = ::std::move(from);
+  }
+
+  inline ContentMetaData_PrintMetadata& operator=(const ContentMetaData_PrintMetadata& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ContentMetaData_PrintMetadata& operator=(ContentMetaData_PrintMetadata&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const {
+    return _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString);
+  }
+  inline std::string* mutable_unknown_fields() {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const ContentMetaData_PrintMetadata& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ContentMetaData_PrintMetadata* internal_default_instance() {
+    return reinterpret_cast<const ContentMetaData_PrintMetadata*>(
+               &_ContentMetaData_PrintMetadata_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    0;
+
+  friend void swap(ContentMetaData_PrintMetadata& a, ContentMetaData_PrintMetadata& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ContentMetaData_PrintMetadata* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ContentMetaData_PrintMetadata* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ContentMetaData_PrintMetadata* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ContentMetaData_PrintMetadata>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ContentMetaData_PrintMetadata& from);
+  void MergeFrom(const ContentMetaData_PrintMetadata& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ContentMetaData_PrintMetadata* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "content_analysis.sdk.ContentMetaData.PrintMetadata";
+  }
+  protected:
+  explicit ContentMetaData_PrintMetadata(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  typedef ContentMetaData_PrintMetadata_PrinterType PrinterType;
+  static constexpr PrinterType UNKNOWN =
+    ContentMetaData_PrintMetadata_PrinterType_UNKNOWN;
+  static constexpr PrinterType CLOUD =
+    ContentMetaData_PrintMetadata_PrinterType_CLOUD;
+  static constexpr PrinterType LOCAL =
+    ContentMetaData_PrintMetadata_PrinterType_LOCAL;
+  static inline bool PrinterType_IsValid(int value) {
+    return ContentMetaData_PrintMetadata_PrinterType_IsValid(value);
+  }
+  static constexpr PrinterType PrinterType_MIN =
+    ContentMetaData_PrintMetadata_PrinterType_PrinterType_MIN;
+  static constexpr PrinterType PrinterType_MAX =
+    ContentMetaData_PrintMetadata_PrinterType_PrinterType_MAX;
+  static constexpr int PrinterType_ARRAYSIZE =
+    ContentMetaData_PrintMetadata_PrinterType_PrinterType_ARRAYSIZE;
+  template<typename T>
+  static inline const std::string& PrinterType_Name(T enum_t_value) {
+    static_assert(::std::is_same<T, PrinterType>::value ||
+      ::std::is_integral<T>::value,
+      "Incorrect type passed to function PrinterType_Name.");
+    return ContentMetaData_PrintMetadata_PrinterType_Name(enum_t_value);
+  }
+  static inline bool PrinterType_Parse(::PROTOBUF_NAMESPACE_ID::ConstStringParam name,
+      PrinterType* value) {
+    return ContentMetaData_PrintMetadata_PrinterType_Parse(name, value);
+  }
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPrinterNameFieldNumber = 1,
+    kPrinterTypeFieldNumber = 2,
+  };
+  // optional string printer_name = 1;
+  bool has_printer_name() const;
+  private:
+  bool _internal_has_printer_name() const;
+  public:
+  void clear_printer_name();
+  const std::string& printer_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_printer_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_printer_name();
+  PROTOBUF_NODISCARD std::string* release_printer_name();
+  void set_allocated_printer_name(std::string* printer_name);
+  private:
+  const std::string& _internal_printer_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_printer_name(const std::string& value);
+  std::string* _internal_mutable_printer_name();
+  public:
+
+  // optional .content_analysis.sdk.ContentMetaData.PrintMetadata.PrinterType printer_type = 2;
+  bool has_printer_type() const;
+  private:
+  bool _internal_has_printer_type() const;
+  public:
+  void clear_printer_type();
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType printer_type() const;
+  void set_printer_type(::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType value);
+  private:
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType _internal_printer_type() const;
+  void _internal_set_printer_type(::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:content_analysis.sdk.ContentMetaData.PrintMetadata)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1> _has_bits_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr printer_name_;
+    int printer_type_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_analysis_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ContentMetaData final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:content_analysis.sdk.ContentMetaData) */ {
  public:
@@ -280,7 +498,7 @@ class ContentMetaData final :
                &_ContentMetaData_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    0;
+    1;
 
   friend void swap(ContentMetaData& a, ContentMetaData& b) {
     a.Swap(&b);
@@ -341,6 +559,8 @@ class ContentMetaData final :
 
   // nested types ----------------------------------------------------
 
+  typedef ContentMetaData_PrintMetadata PrintMetadata;
+
   // accessors -------------------------------------------------------
 
   enum : int {
@@ -350,6 +570,7 @@ class ContentMetaData final :
     kEmailFieldNumber = 5,
     kTabTitleFieldNumber = 9,
     kCsdFieldNumber = 4,
+    kPrintMetadataFieldNumber = 11,
   };
   // optional string url = 1;
   bool has_url() const;
@@ -459,6 +680,24 @@ class ContentMetaData final :
       ::content_analysis::sdk::ClientDownloadRequest* csd);
   ::content_analysis::sdk::ClientDownloadRequest* unsafe_arena_release_csd();
 
+  // optional .content_analysis.sdk.ContentMetaData.PrintMetadata print_metadata = 11;
+  bool has_print_metadata() const;
+  private:
+  bool _internal_has_print_metadata() const;
+  public:
+  void clear_print_metadata();
+  const ::content_analysis::sdk::ContentMetaData_PrintMetadata& print_metadata() const;
+  PROTOBUF_NODISCARD ::content_analysis::sdk::ContentMetaData_PrintMetadata* release_print_metadata();
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata* mutable_print_metadata();
+  void set_allocated_print_metadata(::content_analysis::sdk::ContentMetaData_PrintMetadata* print_metadata);
+  private:
+  const ::content_analysis::sdk::ContentMetaData_PrintMetadata& _internal_print_metadata() const;
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata* _internal_mutable_print_metadata();
+  public:
+  void unsafe_arena_set_allocated_print_metadata(
+      ::content_analysis::sdk::ContentMetaData_PrintMetadata* print_metadata);
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata* unsafe_arena_release_print_metadata();
+
   // @@protoc_insertion_point(class_scope:content_analysis.sdk.ContentMetaData)
  private:
   class _Internal;
@@ -475,6 +714,7 @@ class ContentMetaData final :
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr email_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr tab_title_;
     ::content_analysis::sdk::ClientDownloadRequest* csd_;
+    ::content_analysis::sdk::ContentMetaData_PrintMetadata* print_metadata_;
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_analysis_2eproto;
@@ -527,7 +767,7 @@ class ClientMetadata_Browser final :
                &_ClientMetadata_Browser_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    1;
+    2;
 
   friend void swap(ClientMetadata_Browser& a, ClientMetadata_Browser& b) {
     a.Swap(&b);
@@ -674,7 +914,7 @@ class ClientMetadata final :
                &_ClientMetadata_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    2;
+    3;
 
   friend void swap(ClientMetadata& a, ClientMetadata& b) {
     a.Swap(&b);
@@ -823,7 +1063,7 @@ class ClientDownloadRequest_Resource final :
                &_ClientDownloadRequest_Resource_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    3;
+    4;
 
   friend void swap(ClientDownloadRequest_Resource& a, ClientDownloadRequest_Resource& b) {
     a.Swap(&b);
@@ -988,7 +1228,7 @@ class ClientDownloadRequest final :
                &_ClientDownloadRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    4;
+    5;
 
   friend void swap(ClientDownloadRequest& a, ClientDownloadRequest& b) {
     a.Swap(&b);
@@ -1124,6 +1364,163 @@ class ClientDownloadRequest final :
 };
 // -------------------------------------------------------------------
 
+class ContentAnalysisRequest_PrintData final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:content_analysis.sdk.ContentAnalysisRequest.PrintData) */ {
+ public:
+  inline ContentAnalysisRequest_PrintData() : ContentAnalysisRequest_PrintData(nullptr) {}
+  ~ContentAnalysisRequest_PrintData() override;
+  explicit PROTOBUF_CONSTEXPR ContentAnalysisRequest_PrintData(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ContentAnalysisRequest_PrintData(const ContentAnalysisRequest_PrintData& from);
+  ContentAnalysisRequest_PrintData(ContentAnalysisRequest_PrintData&& from) noexcept
+    : ContentAnalysisRequest_PrintData() {
+    *this = ::std::move(from);
+  }
+
+  inline ContentAnalysisRequest_PrintData& operator=(const ContentAnalysisRequest_PrintData& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ContentAnalysisRequest_PrintData& operator=(ContentAnalysisRequest_PrintData&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const {
+    return _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString);
+  }
+  inline std::string* mutable_unknown_fields() {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const ContentAnalysisRequest_PrintData& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ContentAnalysisRequest_PrintData* internal_default_instance() {
+    return reinterpret_cast<const ContentAnalysisRequest_PrintData*>(
+               &_ContentAnalysisRequest_PrintData_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    6;
+
+  friend void swap(ContentAnalysisRequest_PrintData& a, ContentAnalysisRequest_PrintData& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ContentAnalysisRequest_PrintData* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ContentAnalysisRequest_PrintData* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ContentAnalysisRequest_PrintData* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ContentAnalysisRequest_PrintData>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ContentAnalysisRequest_PrintData& from);
+  void MergeFrom(const ContentAnalysisRequest_PrintData& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ContentAnalysisRequest_PrintData* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "content_analysis.sdk.ContentAnalysisRequest.PrintData";
+  }
+  protected:
+  explicit ContentAnalysisRequest_PrintData(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kHandleFieldNumber = 1,
+    kSizeFieldNumber = 2,
+  };
+  // optional int64 handle = 1;
+  bool has_handle() const;
+  private:
+  bool _internal_has_handle() const;
+  public:
+  void clear_handle();
+  int64_t handle() const;
+  void set_handle(int64_t value);
+  private:
+  int64_t _internal_handle() const;
+  void _internal_set_handle(int64_t value);
+  public:
+
+  // optional int64 size = 2;
+  bool has_size() const;
+  private:
+  bool _internal_has_size() const;
+  public:
+  void clear_size();
+  int64_t size() const;
+  void set_size(int64_t value);
+  private:
+  int64_t _internal_size() const;
+  void _internal_set_size(int64_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1> _has_bits_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+    int64_t handle_;
+    int64_t size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_analysis_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ContentAnalysisRequest final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:content_analysis.sdk.ContentAnalysisRequest) */ {
  public:
@@ -1168,6 +1565,7 @@ class ContentAnalysisRequest final :
   enum ContentDataCase {
     kTextContent = 13,
     kFilePath = 14,
+    kPrintData = 18,
     CONTENT_DATA_NOT_SET = 0,
   };
 
@@ -1176,7 +1574,7 @@ class ContentAnalysisRequest final :
                &_ContentAnalysisRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    5;
+    7;
 
   friend void swap(ContentAnalysisRequest& a, ContentAnalysisRequest& b) {
     a.Swap(&b);
@@ -1237,6 +1635,8 @@ class ContentAnalysisRequest final :
 
   // nested types ----------------------------------------------------
 
+  typedef ContentAnalysisRequest_PrintData PrintData;
+
   // accessors -------------------------------------------------------
 
   enum : int {
@@ -1250,6 +1650,7 @@ class ContentAnalysisRequest final :
     kAnalysisConnectorFieldNumber = 9,
     kTextContentFieldNumber = 13,
     kFilePathFieldNumber = 14,
+    kPrintDataFieldNumber = 18,
   };
   // repeated string tags = 11;
   int tags_size() const;
@@ -1422,6 +1823,24 @@ class ContentAnalysisRequest final :
   std::string* _internal_mutable_file_path();
   public:
 
+  // .content_analysis.sdk.ContentAnalysisRequest.PrintData print_data = 18;
+  bool has_print_data() const;
+  private:
+  bool _internal_has_print_data() const;
+  public:
+  void clear_print_data();
+  const ::content_analysis::sdk::ContentAnalysisRequest_PrintData& print_data() const;
+  PROTOBUF_NODISCARD ::content_analysis::sdk::ContentAnalysisRequest_PrintData* release_print_data();
+  ::content_analysis::sdk::ContentAnalysisRequest_PrintData* mutable_print_data();
+  void set_allocated_print_data(::content_analysis::sdk::ContentAnalysisRequest_PrintData* print_data);
+  private:
+  const ::content_analysis::sdk::ContentAnalysisRequest_PrintData& _internal_print_data() const;
+  ::content_analysis::sdk::ContentAnalysisRequest_PrintData* _internal_mutable_print_data();
+  public:
+  void unsafe_arena_set_allocated_print_data(
+      ::content_analysis::sdk::ContentAnalysisRequest_PrintData* print_data);
+  ::content_analysis::sdk::ContentAnalysisRequest_PrintData* unsafe_arena_release_print_data();
+
   void clear_content_data();
   ContentDataCase content_data_case() const;
   // @@protoc_insertion_point(class_scope:content_analysis.sdk.ContentAnalysisRequest)
@@ -1429,6 +1848,7 @@ class ContentAnalysisRequest final :
   class _Internal;
   void set_has_text_content();
   void set_has_file_path();
+  void set_has_print_data();
 
   inline bool has_content_data() const;
   inline void clear_has_content_data();
@@ -1452,6 +1872,7 @@ class ContentAnalysisRequest final :
         ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized _constinit_;
       ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr text_content_;
       ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr file_path_;
+      ::content_analysis::sdk::ContentAnalysisRequest_PrintData* print_data_;
     } content_data_;
     uint32_t _oneof_case_[1];
 
@@ -1507,7 +1928,7 @@ class ContentAnalysisResponse_Result_TriggeredRule final :
                &_ContentAnalysisResponse_Result_TriggeredRule_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    6;
+    8;
 
   friend void swap(ContentAnalysisResponse_Result_TriggeredRule& a, ContentAnalysisResponse_Result_TriggeredRule& b) {
     a.Swap(&b);
@@ -1719,7 +2140,7 @@ class ContentAnalysisResponse_Result final :
                &_ContentAnalysisResponse_Result_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    7;
+    9;
 
   friend void swap(ContentAnalysisResponse_Result& a, ContentAnalysisResponse_Result& b) {
     a.Swap(&b);
@@ -1931,7 +2352,7 @@ class ContentAnalysisResponse final :
                &_ContentAnalysisResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    8;
+    10;
 
   friend void swap(ContentAnalysisResponse& a, ContentAnalysisResponse& b) {
     a.Swap(&b);
@@ -2100,7 +2521,7 @@ class ContentAnalysisAcknowledgement final :
                &_ContentAnalysisAcknowledgement_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    9;
+    11;
 
   friend void swap(ContentAnalysisAcknowledgement& a, ContentAnalysisAcknowledgement& b) {
     a.Swap(&b);
@@ -2337,7 +2758,7 @@ class ContentAnalysisCancelRequests final :
                &_ContentAnalysisCancelRequests_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    10;
+    12;
 
   friend void swap(ContentAnalysisCancelRequests& a, ContentAnalysisCancelRequests& b) {
     a.Swap(&b);
@@ -2484,7 +2905,7 @@ class ChromeToAgent final :
                &_ChromeToAgent_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    11;
+    13;
 
   friend void swap(ChromeToAgent& a, ChromeToAgent& b) {
     a.Swap(&b);
@@ -2671,7 +3092,7 @@ class AgentToChrome final :
                &_AgentToChrome_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    12;
+    14;
 
   friend void swap(AgentToChrome& a, AgentToChrome& b) {
     a.Swap(&b);
@@ -2779,6 +3200,107 @@ class AgentToChrome final :
   #pragma GCC diagnostic push
   #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif  // __GNUC__
+// ContentMetaData_PrintMetadata
+
+// optional string printer_name = 1;
+inline bool ContentMetaData_PrintMetadata::_internal_has_printer_name() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  return value;
+}
+inline bool ContentMetaData_PrintMetadata::has_printer_name() const {
+  return _internal_has_printer_name();
+}
+inline void ContentMetaData_PrintMetadata::clear_printer_name() {
+  _impl_.printer_name_.ClearToEmpty();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline const std::string& ContentMetaData_PrintMetadata::printer_name() const {
+  // @@protoc_insertion_point(field_get:content_analysis.sdk.ContentMetaData.PrintMetadata.printer_name)
+  return _internal_printer_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void ContentMetaData_PrintMetadata::set_printer_name(ArgT0&& arg0, ArgT... args) {
+ _impl_._has_bits_[0] |= 0x00000001u;
+ _impl_.printer_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:content_analysis.sdk.ContentMetaData.PrintMetadata.printer_name)
+}
+inline std::string* ContentMetaData_PrintMetadata::mutable_printer_name() {
+  std::string* _s = _internal_mutable_printer_name();
+  // @@protoc_insertion_point(field_mutable:content_analysis.sdk.ContentMetaData.PrintMetadata.printer_name)
+  return _s;
+}
+inline const std::string& ContentMetaData_PrintMetadata::_internal_printer_name() const {
+  return _impl_.printer_name_.Get();
+}
+inline void ContentMetaData_PrintMetadata::_internal_set_printer_name(const std::string& value) {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.printer_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* ContentMetaData_PrintMetadata::_internal_mutable_printer_name() {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  return _impl_.printer_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* ContentMetaData_PrintMetadata::release_printer_name() {
+  // @@protoc_insertion_point(field_release:content_analysis.sdk.ContentMetaData.PrintMetadata.printer_name)
+  if (!_internal_has_printer_name()) {
+    return nullptr;
+  }
+  _impl_._has_bits_[0] &= ~0x00000001u;
+  auto* p = _impl_.printer_name_.Release();
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.printer_name_.IsDefault()) {
+    _impl_.printer_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  return p;
+}
+inline void ContentMetaData_PrintMetadata::set_allocated_printer_name(std::string* printer_name) {
+  if (printer_name != nullptr) {
+    _impl_._has_bits_[0] |= 0x00000001u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000001u;
+  }
+  _impl_.printer_name_.SetAllocated(printer_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.printer_name_.IsDefault()) {
+    _impl_.printer_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:content_analysis.sdk.ContentMetaData.PrintMetadata.printer_name)
+}
+
+// optional .content_analysis.sdk.ContentMetaData.PrintMetadata.PrinterType printer_type = 2;
+inline bool ContentMetaData_PrintMetadata::_internal_has_printer_type() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
+  return value;
+}
+inline bool ContentMetaData_PrintMetadata::has_printer_type() const {
+  return _internal_has_printer_type();
+}
+inline void ContentMetaData_PrintMetadata::clear_printer_type() {
+  _impl_.printer_type_ = 0;
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline ::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata::_internal_printer_type() const {
+  return static_cast< ::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType >(_impl_.printer_type_);
+}
+inline ::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata::printer_type() const {
+  // @@protoc_insertion_point(field_get:content_analysis.sdk.ContentMetaData.PrintMetadata.printer_type)
+  return _internal_printer_type();
+}
+inline void ContentMetaData_PrintMetadata::_internal_set_printer_type(::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType value) {
+  assert(::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType_IsValid(value));
+  _impl_._has_bits_[0] |= 0x00000002u;
+  _impl_.printer_type_ = value;
+}
+inline void ContentMetaData_PrintMetadata::set_printer_type(::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType value) {
+  _internal_set_printer_type(value);
+  // @@protoc_insertion_point(field_set:content_analysis.sdk.ContentMetaData.PrintMetadata.printer_type)
+}
+
+// -------------------------------------------------------------------
+
 // ContentMetaData
 
 // optional string url = 1;
@@ -3211,6 +3733,96 @@ inline void ContentMetaData::set_allocated_tab_title(std::string* tab_title) {
   // @@protoc_insertion_point(field_set_allocated:content_analysis.sdk.ContentMetaData.tab_title)
 }
 
+// optional .content_analysis.sdk.ContentMetaData.PrintMetadata print_metadata = 11;
+inline bool ContentMetaData::_internal_has_print_metadata() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000040u) != 0;
+  PROTOBUF_ASSUME(!value || _impl_.print_metadata_ != nullptr);
+  return value;
+}
+inline bool ContentMetaData::has_print_metadata() const {
+  return _internal_has_print_metadata();
+}
+inline void ContentMetaData::clear_print_metadata() {
+  if (_impl_.print_metadata_ != nullptr) _impl_.print_metadata_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000040u;
+}
+inline const ::content_analysis::sdk::ContentMetaData_PrintMetadata& ContentMetaData::_internal_print_metadata() const {
+  const ::content_analysis::sdk::ContentMetaData_PrintMetadata* p = _impl_.print_metadata_;
+  return p != nullptr ? *p : reinterpret_cast<const ::content_analysis::sdk::ContentMetaData_PrintMetadata&>(
+      ::content_analysis::sdk::_ContentMetaData_PrintMetadata_default_instance_);
+}
+inline const ::content_analysis::sdk::ContentMetaData_PrintMetadata& ContentMetaData::print_metadata() const {
+  // @@protoc_insertion_point(field_get:content_analysis.sdk.ContentMetaData.print_metadata)
+  return _internal_print_metadata();
+}
+inline void ContentMetaData::unsafe_arena_set_allocated_print_metadata(
+    ::content_analysis::sdk::ContentMetaData_PrintMetadata* print_metadata) {
+  if (GetArenaForAllocation() == nullptr) {
+    delete reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(_impl_.print_metadata_);
+  }
+  _impl_.print_metadata_ = print_metadata;
+  if (print_metadata) {
+    _impl_._has_bits_[0] |= 0x00000040u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000040u;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:content_analysis.sdk.ContentMetaData.print_metadata)
+}
+inline ::content_analysis::sdk::ContentMetaData_PrintMetadata* ContentMetaData::release_print_metadata() {
+  _impl_._has_bits_[0] &= ~0x00000040u;
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata* temp = _impl_.print_metadata_;
+  _impl_.print_metadata_ = nullptr;
+#ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
+  auto* old =  reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(temp);
+  temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+  if (GetArenaForAllocation() == nullptr) { delete old; }
+#else  // PROTOBUF_FORCE_COPY_IN_RELEASE
+  if (GetArenaForAllocation() != nullptr) {
+    temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+  }
+#endif  // !PROTOBUF_FORCE_COPY_IN_RELEASE
+  return temp;
+}
+inline ::content_analysis::sdk::ContentMetaData_PrintMetadata* ContentMetaData::unsafe_arena_release_print_metadata() {
+  // @@protoc_insertion_point(field_release:content_analysis.sdk.ContentMetaData.print_metadata)
+  _impl_._has_bits_[0] &= ~0x00000040u;
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata* temp = _impl_.print_metadata_;
+  _impl_.print_metadata_ = nullptr;
+  return temp;
+}
+inline ::content_analysis::sdk::ContentMetaData_PrintMetadata* ContentMetaData::_internal_mutable_print_metadata() {
+  _impl_._has_bits_[0] |= 0x00000040u;
+  if (_impl_.print_metadata_ == nullptr) {
+    auto* p = CreateMaybeMessage<::content_analysis::sdk::ContentMetaData_PrintMetadata>(GetArenaForAllocation());
+    _impl_.print_metadata_ = p;
+  }
+  return _impl_.print_metadata_;
+}
+inline ::content_analysis::sdk::ContentMetaData_PrintMetadata* ContentMetaData::mutable_print_metadata() {
+  ::content_analysis::sdk::ContentMetaData_PrintMetadata* _msg = _internal_mutable_print_metadata();
+  // @@protoc_insertion_point(field_mutable:content_analysis.sdk.ContentMetaData.print_metadata)
+  return _msg;
+}
+inline void ContentMetaData::set_allocated_print_metadata(::content_analysis::sdk::ContentMetaData_PrintMetadata* print_metadata) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  if (message_arena == nullptr) {
+    delete _impl_.print_metadata_;
+  }
+  if (print_metadata) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(print_metadata);
+    if (message_arena != submessage_arena) {
+      print_metadata = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, print_metadata, submessage_arena);
+    }
+    _impl_._has_bits_[0] |= 0x00000040u;
+  } else {
+    _impl_._has_bits_[0] &= ~0x00000040u;
+  }
+  _impl_.print_metadata_ = print_metadata;
+  // @@protoc_insertion_point(field_set_allocated:content_analysis.sdk.ContentMetaData.print_metadata)
+}
+
 // -------------------------------------------------------------------
 
 // ClientMetadata_Browser
@@ -3520,6 +4132,66 @@ inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::content_analysis::sdk:
 ClientDownloadRequest::resources() const {
   // @@protoc_insertion_point(field_list:content_analysis.sdk.ClientDownloadRequest.resources)
   return _impl_.resources_;
+}
+
+// -------------------------------------------------------------------
+
+// ContentAnalysisRequest_PrintData
+
+// optional int64 handle = 1;
+inline bool ContentAnalysisRequest_PrintData::_internal_has_handle() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
+  return value;
+}
+inline bool ContentAnalysisRequest_PrintData::has_handle() const {
+  return _internal_has_handle();
+}
+inline void ContentAnalysisRequest_PrintData::clear_handle() {
+  _impl_.handle_ = int64_t{0};
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+inline int64_t ContentAnalysisRequest_PrintData::_internal_handle() const {
+  return _impl_.handle_;
+}
+inline int64_t ContentAnalysisRequest_PrintData::handle() const {
+  // @@protoc_insertion_point(field_get:content_analysis.sdk.ContentAnalysisRequest.PrintData.handle)
+  return _internal_handle();
+}
+inline void ContentAnalysisRequest_PrintData::_internal_set_handle(int64_t value) {
+  _impl_._has_bits_[0] |= 0x00000001u;
+  _impl_.handle_ = value;
+}
+inline void ContentAnalysisRequest_PrintData::set_handle(int64_t value) {
+  _internal_set_handle(value);
+  // @@protoc_insertion_point(field_set:content_analysis.sdk.ContentAnalysisRequest.PrintData.handle)
+}
+
+// optional int64 size = 2;
+inline bool ContentAnalysisRequest_PrintData::_internal_has_size() const {
+  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
+  return value;
+}
+inline bool ContentAnalysisRequest_PrintData::has_size() const {
+  return _internal_has_size();
+}
+inline void ContentAnalysisRequest_PrintData::clear_size() {
+  _impl_.size_ = int64_t{0};
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+inline int64_t ContentAnalysisRequest_PrintData::_internal_size() const {
+  return _impl_.size_;
+}
+inline int64_t ContentAnalysisRequest_PrintData::size() const {
+  // @@protoc_insertion_point(field_get:content_analysis.sdk.ContentAnalysisRequest.PrintData.size)
+  return _internal_size();
+}
+inline void ContentAnalysisRequest_PrintData::_internal_set_size(int64_t value) {
+  _impl_._has_bits_[0] |= 0x00000002u;
+  _impl_.size_ = value;
+}
+inline void ContentAnalysisRequest_PrintData::set_size(int64_t value) {
+  _internal_set_size(value);
+  // @@protoc_insertion_point(field_set:content_analysis.sdk.ContentAnalysisRequest.PrintData.size)
 }
 
 // -------------------------------------------------------------------
@@ -4030,6 +4702,80 @@ inline void ContentAnalysisRequest::set_allocated_file_path(std::string* file_pa
     _impl_.content_data_.file_path_.InitAllocated(file_path, GetArenaForAllocation());
   }
   // @@protoc_insertion_point(field_set_allocated:content_analysis.sdk.ContentAnalysisRequest.file_path)
+}
+
+// .content_analysis.sdk.ContentAnalysisRequest.PrintData print_data = 18;
+inline bool ContentAnalysisRequest::_internal_has_print_data() const {
+  return content_data_case() == kPrintData;
+}
+inline bool ContentAnalysisRequest::has_print_data() const {
+  return _internal_has_print_data();
+}
+inline void ContentAnalysisRequest::set_has_print_data() {
+  _impl_._oneof_case_[0] = kPrintData;
+}
+inline void ContentAnalysisRequest::clear_print_data() {
+  if (_internal_has_print_data()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.content_data_.print_data_;
+    }
+    clear_has_content_data();
+  }
+}
+inline ::content_analysis::sdk::ContentAnalysisRequest_PrintData* ContentAnalysisRequest::release_print_data() {
+  // @@protoc_insertion_point(field_release:content_analysis.sdk.ContentAnalysisRequest.print_data)
+  if (_internal_has_print_data()) {
+    clear_has_content_data();
+    ::content_analysis::sdk::ContentAnalysisRequest_PrintData* temp = _impl_.content_data_.print_data_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.content_data_.print_data_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::content_analysis::sdk::ContentAnalysisRequest_PrintData& ContentAnalysisRequest::_internal_print_data() const {
+  return _internal_has_print_data()
+      ? *_impl_.content_data_.print_data_
+      : reinterpret_cast< ::content_analysis::sdk::ContentAnalysisRequest_PrintData&>(::content_analysis::sdk::_ContentAnalysisRequest_PrintData_default_instance_);
+}
+inline const ::content_analysis::sdk::ContentAnalysisRequest_PrintData& ContentAnalysisRequest::print_data() const {
+  // @@protoc_insertion_point(field_get:content_analysis.sdk.ContentAnalysisRequest.print_data)
+  return _internal_print_data();
+}
+inline ::content_analysis::sdk::ContentAnalysisRequest_PrintData* ContentAnalysisRequest::unsafe_arena_release_print_data() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:content_analysis.sdk.ContentAnalysisRequest.print_data)
+  if (_internal_has_print_data()) {
+    clear_has_content_data();
+    ::content_analysis::sdk::ContentAnalysisRequest_PrintData* temp = _impl_.content_data_.print_data_;
+    _impl_.content_data_.print_data_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ContentAnalysisRequest::unsafe_arena_set_allocated_print_data(::content_analysis::sdk::ContentAnalysisRequest_PrintData* print_data) {
+  clear_content_data();
+  if (print_data) {
+    set_has_print_data();
+    _impl_.content_data_.print_data_ = print_data;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:content_analysis.sdk.ContentAnalysisRequest.print_data)
+}
+inline ::content_analysis::sdk::ContentAnalysisRequest_PrintData* ContentAnalysisRequest::_internal_mutable_print_data() {
+  if (!_internal_has_print_data()) {
+    clear_content_data();
+    set_has_print_data();
+    _impl_.content_data_.print_data_ = CreateMaybeMessage< ::content_analysis::sdk::ContentAnalysisRequest_PrintData >(GetArenaForAllocation());
+  }
+  return _impl_.content_data_.print_data_;
+}
+inline ::content_analysis::sdk::ContentAnalysisRequest_PrintData* ContentAnalysisRequest::mutable_print_data() {
+  ::content_analysis::sdk::ContentAnalysisRequest_PrintData* _msg = _internal_mutable_print_data();
+  // @@protoc_insertion_point(field_mutable:content_analysis.sdk.ContentAnalysisRequest.print_data)
+  return _msg;
 }
 
 // optional int64 expires_at = 15;
@@ -5184,6 +5930,10 @@ inline void AgentToChrome::set_allocated_response(::content_analysis::sdk::Conte
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 
 // @@protoc_insertion_point(namespace_scope)
 
@@ -5192,6 +5942,7 @@ inline void AgentToChrome::set_allocated_response(::content_analysis::sdk::Conte
 
 PROTOBUF_NAMESPACE_OPEN
 
+template <> struct is_proto_enum< ::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType> : ::std::true_type {};
 template <> struct is_proto_enum< ::content_analysis::sdk::ClientDownloadRequest_ResourceType> : ::std::true_type {};
 template <> struct is_proto_enum< ::content_analysis::sdk::ContentAnalysisResponse_Result_TriggeredRule_Action> : ::std::true_type {};
 template <> struct is_proto_enum< ::content_analysis::sdk::ContentAnalysisResponse_Result_Status> : ::std::true_type {};

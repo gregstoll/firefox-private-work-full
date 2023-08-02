@@ -19,6 +19,21 @@ namespace _pbi = _pb::internal;
 
 namespace content_analysis {
 namespace sdk {
+PROTOBUF_CONSTEXPR ContentMetaData_PrintMetadata::ContentMetaData_PrintMetadata(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_._has_bits_)*/{}
+  , /*decltype(_impl_._cached_size_)*/{}
+  , /*decltype(_impl_.printer_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.printer_type_)*/0} {}
+struct ContentMetaData_PrintMetadataDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ContentMetaData_PrintMetadataDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ContentMetaData_PrintMetadataDefaultTypeInternal() {}
+  union {
+    ContentMetaData_PrintMetadata _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ContentMetaData_PrintMetadataDefaultTypeInternal _ContentMetaData_PrintMetadata_default_instance_;
 PROTOBUF_CONSTEXPR ContentMetaData::ContentMetaData(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_._has_bits_)*/{}
@@ -28,7 +43,8 @@ PROTOBUF_CONSTEXPR ContentMetaData::ContentMetaData(
   , /*decltype(_impl_.digest_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.email_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.tab_title_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_.csd_)*/nullptr} {}
+  , /*decltype(_impl_.csd_)*/nullptr
+  , /*decltype(_impl_.print_metadata_)*/nullptr} {}
 struct ContentMetaDataDefaultTypeInternal {
   PROTOBUF_CONSTEXPR ContentMetaDataDefaultTypeInternal()
       : _instance(::_pbi::ConstantInitialized{}) {}
@@ -94,6 +110,21 @@ struct ClientDownloadRequestDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ClientDownloadRequestDefaultTypeInternal _ClientDownloadRequest_default_instance_;
+PROTOBUF_CONSTEXPR ContentAnalysisRequest_PrintData::ContentAnalysisRequest_PrintData(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_._has_bits_)*/{}
+  , /*decltype(_impl_._cached_size_)*/{}
+  , /*decltype(_impl_.handle_)*/int64_t{0}
+  , /*decltype(_impl_.size_)*/int64_t{0}} {}
+struct ContentAnalysisRequest_PrintDataDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ContentAnalysisRequest_PrintDataDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ContentAnalysisRequest_PrintDataDefaultTypeInternal() {}
+  union {
+    ContentAnalysisRequest_PrintData _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ContentAnalysisRequest_PrintDataDefaultTypeInternal _ContentAnalysisRequest_PrintData_default_instance_;
 PROTOBUF_CONSTEXPR ContentAnalysisRequest::ContentAnalysisRequest(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_._has_bits_)*/{}
@@ -228,6 +259,69 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORIT
 }  // namespace content_analysis
 namespace content_analysis {
 namespace sdk {
+bool ContentMetaData_PrintMetadata_PrinterType_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> ContentMetaData_PrintMetadata_PrinterType_strings[3] = {};
+
+static const char ContentMetaData_PrintMetadata_PrinterType_names[] =
+  "CLOUD"
+  "LOCAL"
+  "UNKNOWN";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry ContentMetaData_PrintMetadata_PrinterType_entries[] = {
+  { {ContentMetaData_PrintMetadata_PrinterType_names + 0, 5}, 1 },
+  { {ContentMetaData_PrintMetadata_PrinterType_names + 5, 5}, 2 },
+  { {ContentMetaData_PrintMetadata_PrinterType_names + 10, 7}, 0 },
+};
+
+static const int ContentMetaData_PrintMetadata_PrinterType_entries_by_number[] = {
+  2, // 0 -> UNKNOWN
+  0, // 1 -> CLOUD
+  1, // 2 -> LOCAL
+};
+
+const std::string& ContentMetaData_PrintMetadata_PrinterType_Name(
+    ContentMetaData_PrintMetadata_PrinterType value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          ContentMetaData_PrintMetadata_PrinterType_entries,
+          ContentMetaData_PrintMetadata_PrinterType_entries_by_number,
+          3, ContentMetaData_PrintMetadata_PrinterType_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      ContentMetaData_PrintMetadata_PrinterType_entries,
+      ContentMetaData_PrintMetadata_PrinterType_entries_by_number,
+      3, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     ContentMetaData_PrintMetadata_PrinterType_strings[idx].get();
+}
+bool ContentMetaData_PrintMetadata_PrinterType_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ContentMetaData_PrintMetadata_PrinterType* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      ContentMetaData_PrintMetadata_PrinterType_entries, 3, name, &int_value);
+  if (success) {
+    *value = static_cast<ContentMetaData_PrintMetadata_PrinterType>(int_value);
+  }
+  return success;
+}
+#if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+constexpr ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata::UNKNOWN;
+constexpr ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata::CLOUD;
+constexpr ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata::LOCAL;
+constexpr ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata::PrinterType_MIN;
+constexpr ContentMetaData_PrintMetadata_PrinterType ContentMetaData_PrintMetadata::PrinterType_MAX;
+constexpr int ContentMetaData_PrintMetadata::PrinterType_ARRAYSIZE;
+#endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
 bool ClientDownloadRequest_ResourceType_IsValid(int value) {
   switch (value) {
     case 0:
@@ -643,6 +737,264 @@ bool AnalysisConnector_Parse(
 
 // ===================================================================
 
+class ContentMetaData_PrintMetadata::_Internal {
+ public:
+  using HasBits = decltype(std::declval<ContentMetaData_PrintMetadata>()._impl_._has_bits_);
+  static void set_has_printer_name(HasBits* has_bits) {
+    (*has_bits)[0] |= 1u;
+  }
+  static void set_has_printer_type(HasBits* has_bits) {
+    (*has_bits)[0] |= 2u;
+  }
+};
+
+ContentMetaData_PrintMetadata::ContentMetaData_PrintMetadata(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:content_analysis.sdk.ContentMetaData.PrintMetadata)
+}
+ContentMetaData_PrintMetadata::ContentMetaData_PrintMetadata(const ContentMetaData_PrintMetadata& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  ContentMetaData_PrintMetadata* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_._has_bits_){from._impl_._has_bits_}
+    , /*decltype(_impl_._cached_size_)*/{}
+    , decltype(_impl_.printer_name_){}
+    , decltype(_impl_.printer_type_){}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.printer_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.printer_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (from._internal_has_printer_name()) {
+    _this->_impl_.printer_name_.Set(from._internal_printer_name(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.printer_type_ = from._impl_.printer_type_;
+  // @@protoc_insertion_point(copy_constructor:content_analysis.sdk.ContentMetaData.PrintMetadata)
+}
+
+inline void ContentMetaData_PrintMetadata::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_._has_bits_){}
+    , /*decltype(_impl_._cached_size_)*/{}
+    , decltype(_impl_.printer_name_){}
+    , decltype(_impl_.printer_type_){0}
+  };
+  _impl_.printer_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.printer_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+ContentMetaData_PrintMetadata::~ContentMetaData_PrintMetadata() {
+  // @@protoc_insertion_point(destructor:content_analysis.sdk.ContentMetaData.PrintMetadata)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void ContentMetaData_PrintMetadata::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.printer_name_.Destroy();
+}
+
+void ContentMetaData_PrintMetadata::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void ContentMetaData_PrintMetadata::Clear() {
+// @@protoc_insertion_point(message_clear_start:content_analysis.sdk.ContentMetaData.PrintMetadata)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    _impl_.printer_name_.ClearNonDefaultToEmpty();
+  }
+  _impl_.printer_type_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* ContentMetaData_PrintMetadata::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  _Internal::HasBits has_bits{};
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // optional string printer_name = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_printer_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional .content_analysis.sdk.ContentMetaData.PrintMetadata.PrinterType printer_type = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          if (PROTOBUF_PREDICT_TRUE(::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType_IsValid(val))) {
+            _internal_set_printer_type(static_cast<::content_analysis::sdk::ContentMetaData_PrintMetadata_PrinterType>(val));
+          } else {
+            ::PROTOBUF_NAMESPACE_ID::internal::WriteVarint(2, val, mutable_unknown_fields());
+          }
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  _impl_._has_bits_.Or(has_bits);
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ContentMetaData_PrintMetadata::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:content_analysis.sdk.ContentMetaData.PrintMetadata)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  // optional string printer_name = 1;
+  if (cached_has_bits & 0x00000001u) {
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_printer_name(), target);
+  }
+
+  // optional .content_analysis.sdk.ContentMetaData.PrintMetadata.PrinterType printer_type = 2;
+  if (cached_has_bits & 0x00000002u) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      2, this->_internal_printer_type(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:content_analysis.sdk.ContentMetaData.PrintMetadata)
+  return target;
+}
+
+size_t ContentMetaData_PrintMetadata::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:content_analysis.sdk.ContentMetaData.PrintMetadata)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000003u) {
+    // optional string printer_name = 1;
+    if (cached_has_bits & 0x00000001u) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+          this->_internal_printer_name());
+    }
+
+    // optional .content_analysis.sdk.ContentMetaData.PrintMetadata.PrinterType printer_type = 2;
+    if (cached_has_bits & 0x00000002u) {
+      total_size += 1 +
+        ::_pbi::WireFormatLite::EnumSize(this->_internal_printer_type());
+    }
+
+  }
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void ContentMetaData_PrintMetadata::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const ContentMetaData_PrintMetadata*>(
+      &from));
+}
+
+void ContentMetaData_PrintMetadata::MergeFrom(const ContentMetaData_PrintMetadata& from) {
+  ContentMetaData_PrintMetadata* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:content_analysis.sdk.ContentMetaData.PrintMetadata)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000003u) {
+    if (cached_has_bits & 0x00000001u) {
+      _this->_internal_set_printer_name(from._internal_printer_name());
+    }
+    if (cached_has_bits & 0x00000002u) {
+      _this->_impl_.printer_type_ = from._impl_.printer_type_;
+    }
+    _this->_impl_._has_bits_[0] |= cached_has_bits;
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void ContentMetaData_PrintMetadata::CopyFrom(const ContentMetaData_PrintMetadata& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:content_analysis.sdk.ContentMetaData.PrintMetadata)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ContentMetaData_PrintMetadata::IsInitialized() const {
+  return true;
+}
+
+void ContentMetaData_PrintMetadata::InternalSwap(ContentMetaData_PrintMetadata* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.printer_name_, lhs_arena,
+      &other->_impl_.printer_name_, rhs_arena
+  );
+  swap(_impl_.printer_type_, other->_impl_.printer_type_);
+}
+
+std::string ContentMetaData_PrintMetadata::GetTypeName() const {
+  return "content_analysis.sdk.ContentMetaData.PrintMetadata";
+}
+
+
+// ===================================================================
+
 class ContentMetaData::_Internal {
  public:
   using HasBits = decltype(std::declval<ContentMetaData>()._impl_._has_bits_);
@@ -665,11 +1017,19 @@ class ContentMetaData::_Internal {
   static void set_has_tab_title(HasBits* has_bits) {
     (*has_bits)[0] |= 16u;
   }
+  static const ::content_analysis::sdk::ContentMetaData_PrintMetadata& print_metadata(const ContentMetaData* msg);
+  static void set_has_print_metadata(HasBits* has_bits) {
+    (*has_bits)[0] |= 64u;
+  }
 };
 
 const ::content_analysis::sdk::ClientDownloadRequest&
 ContentMetaData::_Internal::csd(const ContentMetaData* msg) {
   return *msg->_impl_.csd_;
+}
+const ::content_analysis::sdk::ContentMetaData_PrintMetadata&
+ContentMetaData::_Internal::print_metadata(const ContentMetaData* msg) {
+  return *msg->_impl_.print_metadata_;
 }
 ContentMetaData::ContentMetaData(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
@@ -688,7 +1048,8 @@ ContentMetaData::ContentMetaData(const ContentMetaData& from)
     , decltype(_impl_.digest_){}
     , decltype(_impl_.email_){}
     , decltype(_impl_.tab_title_){}
-    , decltype(_impl_.csd_){nullptr}};
+    , decltype(_impl_.csd_){nullptr}
+    , decltype(_impl_.print_metadata_){nullptr}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   _impl_.url_.InitDefault();
@@ -696,7 +1057,7 @@ ContentMetaData::ContentMetaData(const ContentMetaData& from)
     _impl_.url_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_url()) {
-    _this->_impl_.url_.Set(from._internal_url(),
+    _this->_impl_.url_.Set(from._internal_url(), 
       _this->GetArenaForAllocation());
   }
   _impl_.filename_.InitDefault();
@@ -704,7 +1065,7 @@ ContentMetaData::ContentMetaData(const ContentMetaData& from)
     _impl_.filename_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_filename()) {
-    _this->_impl_.filename_.Set(from._internal_filename(),
+    _this->_impl_.filename_.Set(from._internal_filename(), 
       _this->GetArenaForAllocation());
   }
   _impl_.digest_.InitDefault();
@@ -712,7 +1073,7 @@ ContentMetaData::ContentMetaData(const ContentMetaData& from)
     _impl_.digest_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_digest()) {
-    _this->_impl_.digest_.Set(from._internal_digest(),
+    _this->_impl_.digest_.Set(from._internal_digest(), 
       _this->GetArenaForAllocation());
   }
   _impl_.email_.InitDefault();
@@ -720,7 +1081,7 @@ ContentMetaData::ContentMetaData(const ContentMetaData& from)
     _impl_.email_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_email()) {
-    _this->_impl_.email_.Set(from._internal_email(),
+    _this->_impl_.email_.Set(from._internal_email(), 
       _this->GetArenaForAllocation());
   }
   _impl_.tab_title_.InitDefault();
@@ -728,11 +1089,14 @@ ContentMetaData::ContentMetaData(const ContentMetaData& from)
     _impl_.tab_title_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_tab_title()) {
-    _this->_impl_.tab_title_.Set(from._internal_tab_title(),
+    _this->_impl_.tab_title_.Set(from._internal_tab_title(), 
       _this->GetArenaForAllocation());
   }
   if (from._internal_has_csd()) {
     _this->_impl_.csd_ = new ::content_analysis::sdk::ClientDownloadRequest(*from._impl_.csd_);
+  }
+  if (from._internal_has_print_metadata()) {
+    _this->_impl_.print_metadata_ = new ::content_analysis::sdk::ContentMetaData_PrintMetadata(*from._impl_.print_metadata_);
   }
   // @@protoc_insertion_point(copy_constructor:content_analysis.sdk.ContentMetaData)
 }
@@ -750,6 +1114,7 @@ inline void ContentMetaData::SharedCtor(
     , decltype(_impl_.email_){}
     , decltype(_impl_.tab_title_){}
     , decltype(_impl_.csd_){nullptr}
+    , decltype(_impl_.print_metadata_){nullptr}
   };
   _impl_.url_.InitDefault();
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
@@ -790,6 +1155,7 @@ inline void ContentMetaData::SharedDtor() {
   _impl_.email_.Destroy();
   _impl_.tab_title_.Destroy();
   if (this != internal_default_instance()) delete _impl_.csd_;
+  if (this != internal_default_instance()) delete _impl_.print_metadata_;
 }
 
 void ContentMetaData::SetCachedSize(int size) const {
@@ -803,7 +1169,7 @@ void ContentMetaData::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (cached_has_bits & 0x0000003fu) {
+  if (cached_has_bits & 0x0000007fu) {
     if (cached_has_bits & 0x00000001u) {
       _impl_.url_.ClearNonDefaultToEmpty();
     }
@@ -822,6 +1188,10 @@ void ContentMetaData::Clear() {
     if (cached_has_bits & 0x00000020u) {
       GOOGLE_DCHECK(_impl_.csd_ != nullptr);
       _impl_.csd_->Clear();
+    }
+    if (cached_has_bits & 0x00000040u) {
+      GOOGLE_DCHECK(_impl_.print_metadata_ != nullptr);
+      _impl_.print_metadata_->Clear();
     }
   }
   _impl_._has_bits_.Clear();
@@ -884,6 +1254,14 @@ const char* ContentMetaData::_InternalParse(const char* ptr, ::_pbi::ParseContex
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
           auto str = _internal_mutable_tab_title();
           ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional .content_analysis.sdk.ContentMetaData.PrintMetadata print_metadata = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
+          ptr = ctx->ParseMessage(_internal_mutable_print_metadata(), ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -956,6 +1334,13 @@ uint8_t* ContentMetaData::_InternalSerialize(
         9, this->_internal_tab_title(), target);
   }
 
+  // optional .content_analysis.sdk.ContentMetaData.PrintMetadata print_metadata = 11;
+  if (cached_has_bits & 0x00000040u) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(11, _Internal::print_metadata(this),
+        _Internal::print_metadata(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -973,7 +1358,7 @@ size_t ContentMetaData::ByteSizeLong() const {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (cached_has_bits & 0x0000003fu) {
+  if (cached_has_bits & 0x0000007fu) {
     // optional string url = 1;
     if (cached_has_bits & 0x00000001u) {
       total_size += 1 +
@@ -1016,6 +1401,13 @@ size_t ContentMetaData::ByteSizeLong() const {
           *_impl_.csd_);
     }
 
+    // optional .content_analysis.sdk.ContentMetaData.PrintMetadata print_metadata = 11;
+    if (cached_has_bits & 0x00000040u) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.print_metadata_);
+    }
+
   }
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
@@ -1039,7 +1431,7 @@ void ContentMetaData::MergeFrom(const ContentMetaData& from) {
   (void) cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (cached_has_bits & 0x0000003fu) {
+  if (cached_has_bits & 0x0000007fu) {
     if (cached_has_bits & 0x00000001u) {
       _this->_internal_set_url(from._internal_url());
     }
@@ -1058,6 +1450,10 @@ void ContentMetaData::MergeFrom(const ContentMetaData& from) {
     if (cached_has_bits & 0x00000020u) {
       _this->_internal_mutable_csd()->::content_analysis::sdk::ClientDownloadRequest::MergeFrom(
           from._internal_csd());
+    }
+    if (cached_has_bits & 0x00000040u) {
+      _this->_internal_mutable_print_metadata()->::content_analysis::sdk::ContentMetaData_PrintMetadata::MergeFrom(
+          from._internal_print_metadata());
     }
   }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -1103,7 +1499,12 @@ void ContentMetaData::InternalSwap(ContentMetaData* other) {
       &_impl_.tab_title_, lhs_arena,
       &other->_impl_.tab_title_, rhs_arena
   );
-  swap(_impl_.csd_, other->_impl_.csd_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ContentMetaData, _impl_.print_metadata_)
+      + sizeof(ContentMetaData::_impl_.print_metadata_)
+      - PROTOBUF_FIELD_OFFSET(ContentMetaData, _impl_.csd_)>(
+          reinterpret_cast<char*>(&_impl_.csd_),
+          reinterpret_cast<char*>(&other->_impl_.csd_));
 }
 
 std::string ContentMetaData::GetTypeName() const {
@@ -1141,7 +1542,7 @@ ClientMetadata_Browser::ClientMetadata_Browser(const ClientMetadata_Browser& fro
     _impl_.machine_user_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_machine_user()) {
-    _this->_impl_.machine_user_.Set(from._internal_machine_user(),
+    _this->_impl_.machine_user_.Set(from._internal_machine_user(), 
       _this->GetArenaForAllocation());
   }
   // @@protoc_insertion_point(copy_constructor:content_analysis.sdk.ClientMetadata.Browser)
@@ -1571,7 +1972,7 @@ ClientDownloadRequest_Resource::ClientDownloadRequest_Resource(const ClientDownl
     _impl_.url_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_url()) {
-    _this->_impl_.url_.Set(from._internal_url(),
+    _this->_impl_.url_.Set(from._internal_url(), 
       _this->GetArenaForAllocation());
   }
   _this->_impl_.type_ = from._impl_.type_;
@@ -2003,6 +2404,245 @@ std::string ClientDownloadRequest::GetTypeName() const {
 
 // ===================================================================
 
+class ContentAnalysisRequest_PrintData::_Internal {
+ public:
+  using HasBits = decltype(std::declval<ContentAnalysisRequest_PrintData>()._impl_._has_bits_);
+  static void set_has_handle(HasBits* has_bits) {
+    (*has_bits)[0] |= 1u;
+  }
+  static void set_has_size(HasBits* has_bits) {
+    (*has_bits)[0] |= 2u;
+  }
+};
+
+ContentAnalysisRequest_PrintData::ContentAnalysisRequest_PrintData(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+}
+ContentAnalysisRequest_PrintData::ContentAnalysisRequest_PrintData(const ContentAnalysisRequest_PrintData& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  ContentAnalysisRequest_PrintData* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_._has_bits_){from._impl_._has_bits_}
+    , /*decltype(_impl_._cached_size_)*/{}
+    , decltype(_impl_.handle_){}
+    , decltype(_impl_.size_){}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.handle_, &from._impl_.handle_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.size_) -
+    reinterpret_cast<char*>(&_impl_.handle_)) + sizeof(_impl_.size_));
+  // @@protoc_insertion_point(copy_constructor:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+}
+
+inline void ContentAnalysisRequest_PrintData::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_._has_bits_){}
+    , /*decltype(_impl_._cached_size_)*/{}
+    , decltype(_impl_.handle_){int64_t{0}}
+    , decltype(_impl_.size_){int64_t{0}}
+  };
+}
+
+ContentAnalysisRequest_PrintData::~ContentAnalysisRequest_PrintData() {
+  // @@protoc_insertion_point(destructor:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void ContentAnalysisRequest_PrintData::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void ContentAnalysisRequest_PrintData::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void ContentAnalysisRequest_PrintData::Clear() {
+// @@protoc_insertion_point(message_clear_start:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000003u) {
+    ::memset(&_impl_.handle_, 0, static_cast<size_t>(
+        reinterpret_cast<char*>(&_impl_.size_) -
+        reinterpret_cast<char*>(&_impl_.handle_)) + sizeof(_impl_.size_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* ContentAnalysisRequest_PrintData::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  _Internal::HasBits has_bits{};
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // optional int64 handle = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _Internal::set_has_handle(&has_bits);
+          _impl_.handle_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional int64 size = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _Internal::set_has_size(&has_bits);
+          _impl_.size_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  _impl_._has_bits_.Or(has_bits);
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ContentAnalysisRequest_PrintData::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  // optional int64 handle = 1;
+  if (cached_has_bits & 0x00000001u) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt64ToArray(1, this->_internal_handle(), target);
+  }
+
+  // optional int64 size = 2;
+  if (cached_has_bits & 0x00000002u) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt64ToArray(2, this->_internal_size(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+  return target;
+}
+
+size_t ContentAnalysisRequest_PrintData::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000003u) {
+    // optional int64 handle = 1;
+    if (cached_has_bits & 0x00000001u) {
+      total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(this->_internal_handle());
+    }
+
+    // optional int64 size = 2;
+    if (cached_has_bits & 0x00000002u) {
+      total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(this->_internal_size());
+    }
+
+  }
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void ContentAnalysisRequest_PrintData::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const ContentAnalysisRequest_PrintData*>(
+      &from));
+}
+
+void ContentAnalysisRequest_PrintData::MergeFrom(const ContentAnalysisRequest_PrintData& from) {
+  ContentAnalysisRequest_PrintData* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000003u) {
+    if (cached_has_bits & 0x00000001u) {
+      _this->_impl_.handle_ = from._impl_.handle_;
+    }
+    if (cached_has_bits & 0x00000002u) {
+      _this->_impl_.size_ = from._impl_.size_;
+    }
+    _this->_impl_._has_bits_[0] |= cached_has_bits;
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void ContentAnalysisRequest_PrintData::CopyFrom(const ContentAnalysisRequest_PrintData& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:content_analysis.sdk.ContentAnalysisRequest.PrintData)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ContentAnalysisRequest_PrintData::IsInitialized() const {
+  return true;
+}
+
+void ContentAnalysisRequest_PrintData::InternalSwap(ContentAnalysisRequest_PrintData* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ContentAnalysisRequest_PrintData, _impl_.size_)
+      + sizeof(ContentAnalysisRequest_PrintData::_impl_.size_)
+      - PROTOBUF_FIELD_OFFSET(ContentAnalysisRequest_PrintData, _impl_.handle_)>(
+          reinterpret_cast<char*>(&_impl_.handle_),
+          reinterpret_cast<char*>(&other->_impl_.handle_));
+}
+
+std::string ContentAnalysisRequest_PrintData::GetTypeName() const {
+  return "content_analysis.sdk.ContentAnalysisRequest.PrintData";
+}
+
+
+// ===================================================================
+
 class ContentAnalysisRequest::_Internal {
  public:
   using HasBits = decltype(std::declval<ContentAnalysisRequest>()._impl_._has_bits_);
@@ -2020,6 +2660,7 @@ class ContentAnalysisRequest::_Internal {
   static void set_has_client_metadata(HasBits* has_bits) {
     (*has_bits)[0] |= 8u;
   }
+  static const ::content_analysis::sdk::ContentAnalysisRequest_PrintData& print_data(const ContentAnalysisRequest* msg);
   static void set_has_expires_at(HasBits* has_bits) {
     (*has_bits)[0] |= 16u;
   }
@@ -2038,6 +2679,25 @@ ContentAnalysisRequest::_Internal::request_data(const ContentAnalysisRequest* ms
 const ::content_analysis::sdk::ClientMetadata&
 ContentAnalysisRequest::_Internal::client_metadata(const ContentAnalysisRequest* msg) {
   return *msg->_impl_.client_metadata_;
+}
+const ::content_analysis::sdk::ContentAnalysisRequest_PrintData&
+ContentAnalysisRequest::_Internal::print_data(const ContentAnalysisRequest* msg) {
+  return *msg->_impl_.content_data_.print_data_;
+}
+void ContentAnalysisRequest::set_allocated_print_data(::content_analysis::sdk::ContentAnalysisRequest_PrintData* print_data) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_content_data();
+  if (print_data) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(print_data);
+    if (message_arena != submessage_arena) {
+      print_data = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, print_data, submessage_arena);
+    }
+    set_has_print_data();
+    _impl_.content_data_.print_data_ = print_data;
+  }
+  // @@protoc_insertion_point(field_set_allocated:content_analysis.sdk.ContentAnalysisRequest.print_data)
 }
 ContentAnalysisRequest::ContentAnalysisRequest(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
@@ -2068,7 +2728,7 @@ ContentAnalysisRequest::ContentAnalysisRequest(const ContentAnalysisRequest& fro
     _impl_.request_token_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_request_token()) {
-    _this->_impl_.request_token_.Set(from._internal_request_token(),
+    _this->_impl_.request_token_.Set(from._internal_request_token(), 
       _this->GetArenaForAllocation());
   }
   _impl_.user_action_id_.InitDefault();
@@ -2076,7 +2736,7 @@ ContentAnalysisRequest::ContentAnalysisRequest(const ContentAnalysisRequest& fro
     _impl_.user_action_id_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_user_action_id()) {
-    _this->_impl_.user_action_id_.Set(from._internal_user_action_id(),
+    _this->_impl_.user_action_id_.Set(from._internal_user_action_id(), 
       _this->GetArenaForAllocation());
   }
   if (from._internal_has_request_data()) {
@@ -2096,6 +2756,11 @@ ContentAnalysisRequest::ContentAnalysisRequest(const ContentAnalysisRequest& fro
     }
     case kFilePath: {
       _this->_internal_set_file_path(from._internal_file_path());
+      break;
+    }
+    case kPrintData: {
+      _this->_internal_mutable_print_data()->::content_analysis::sdk::ContentAnalysisRequest_PrintData::MergeFrom(
+          from._internal_print_data());
       break;
     }
     case CONTENT_DATA_NOT_SET: {
@@ -2168,6 +2833,12 @@ void ContentAnalysisRequest::clear_content_data() {
     }
     case kFilePath: {
       _impl_.content_data_.file_path_.Destroy();
+      break;
+    }
+    case kPrintData: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.content_data_.print_data_;
+      }
       break;
     }
     case CONTENT_DATA_NOT_SET: {
@@ -2316,6 +2987,14 @@ const char* ContentAnalysisRequest::_InternalParse(const char* ptr, ::_pbi::Pars
         } else
           goto handle_unusual;
         continue;
+      // .content_analysis.sdk.ContentAnalysisRequest.PrintData print_data = 18;
+      case 18:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 146)) {
+          ptr = ctx->ParseMessage(_internal_mutable_print_data(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -2411,6 +3090,13 @@ uint8_t* ContentAnalysisRequest::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteInt64ToArray(17, this->_internal_user_action_requests_count(), target);
   }
 
+  // .content_analysis.sdk.ContentAnalysisRequest.PrintData print_data = 18;
+  if (_internal_has_print_data()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(18, _Internal::print_data(this),
+        _Internal::print_data(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -2499,6 +3185,13 @@ size_t ContentAnalysisRequest::ByteSizeLong() const {
           this->_internal_file_path());
       break;
     }
+    // .content_analysis.sdk.ContentAnalysisRequest.PrintData print_data = 18;
+    case kPrintData: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.content_data_.print_data_);
+      break;
+    }
     case CONTENT_DATA_NOT_SET: {
       break;
     }
@@ -2559,6 +3252,11 @@ void ContentAnalysisRequest::MergeFrom(const ContentAnalysisRequest& from) {
     }
     case kFilePath: {
       _this->_internal_set_file_path(from._internal_file_path());
+      break;
+    }
+    case kPrintData: {
+      _this->_internal_mutable_print_data()->::content_analysis::sdk::ContentAnalysisRequest_PrintData::MergeFrom(
+          from._internal_print_data());
       break;
     }
     case CONTENT_DATA_NOT_SET: {
@@ -2650,7 +3348,7 @@ ContentAnalysisResponse_Result_TriggeredRule::ContentAnalysisResponse_Result_Tri
     _impl_.rule_name_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_rule_name()) {
-    _this->_impl_.rule_name_.Set(from._internal_rule_name(),
+    _this->_impl_.rule_name_.Set(from._internal_rule_name(), 
       _this->GetArenaForAllocation());
   }
   _impl_.rule_id_.InitDefault();
@@ -2658,7 +3356,7 @@ ContentAnalysisResponse_Result_TriggeredRule::ContentAnalysisResponse_Result_Tri
     _impl_.rule_id_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_rule_id()) {
-    _this->_impl_.rule_id_.Set(from._internal_rule_id(),
+    _this->_impl_.rule_id_.Set(from._internal_rule_id(), 
       _this->GetArenaForAllocation());
   }
   _this->_impl_.action_ = from._impl_.action_;
@@ -2957,7 +3655,7 @@ ContentAnalysisResponse_Result::ContentAnalysisResponse_Result(const ContentAnal
     _impl_.tag_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_tag()) {
-    _this->_impl_.tag_.Set(from._internal_tag(),
+    _this->_impl_.tag_.Set(from._internal_tag(), 
       _this->GetArenaForAllocation());
   }
   _this->_impl_.status_ = from._impl_.status_;
@@ -3245,7 +3943,7 @@ ContentAnalysisResponse::ContentAnalysisResponse(const ContentAnalysisResponse& 
     _impl_.request_token_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_request_token()) {
-    _this->_impl_.request_token_.Set(from._internal_request_token(),
+    _this->_impl_.request_token_.Set(from._internal_request_token(), 
       _this->GetArenaForAllocation());
   }
   // @@protoc_insertion_point(copy_constructor:content_analysis.sdk.ContentAnalysisResponse)
@@ -3501,7 +4199,7 @@ ContentAnalysisAcknowledgement::ContentAnalysisAcknowledgement(const ContentAnal
     _impl_.request_token_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_request_token()) {
-    _this->_impl_.request_token_.Set(from._internal_request_token(),
+    _this->_impl_.request_token_.Set(from._internal_request_token(), 
       _this->GetArenaForAllocation());
   }
   ::memcpy(&_impl_.final_action_, &from._impl_.final_action_,
@@ -3791,7 +4489,7 @@ ContentAnalysisCancelRequests::ContentAnalysisCancelRequests(const ContentAnalys
     _impl_.user_action_id_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   if (from._internal_has_user_action_id()) {
-    _this->_impl_.user_action_id_.Set(from._internal_user_action_id(),
+    _this->_impl_.user_action_id_.Set(from._internal_user_action_id(), 
       _this->GetArenaForAllocation());
   }
   // @@protoc_insertion_point(copy_constructor:content_analysis.sdk.ContentAnalysisCancelRequests)
@@ -4499,6 +5197,10 @@ std::string AgentToChrome::GetTypeName() const {
 }  // namespace sdk
 }  // namespace content_analysis
 PROTOBUF_NAMESPACE_OPEN
+template<> PROTOBUF_NOINLINE ::content_analysis::sdk::ContentMetaData_PrintMetadata*
+Arena::CreateMaybeMessage< ::content_analysis::sdk::ContentMetaData_PrintMetadata >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::content_analysis::sdk::ContentMetaData_PrintMetadata >(arena);
+}
 template<> PROTOBUF_NOINLINE ::content_analysis::sdk::ContentMetaData*
 Arena::CreateMaybeMessage< ::content_analysis::sdk::ContentMetaData >(Arena* arena) {
   return Arena::CreateMessageInternal< ::content_analysis::sdk::ContentMetaData >(arena);
@@ -4518,6 +5220,10 @@ Arena::CreateMaybeMessage< ::content_analysis::sdk::ClientDownloadRequest_Resour
 template<> PROTOBUF_NOINLINE ::content_analysis::sdk::ClientDownloadRequest*
 Arena::CreateMaybeMessage< ::content_analysis::sdk::ClientDownloadRequest >(Arena* arena) {
   return Arena::CreateMessageInternal< ::content_analysis::sdk::ClientDownloadRequest >(arena);
+}
+template<> PROTOBUF_NOINLINE ::content_analysis::sdk::ContentAnalysisRequest_PrintData*
+Arena::CreateMaybeMessage< ::content_analysis::sdk::ContentAnalysisRequest_PrintData >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::content_analysis::sdk::ContentAnalysisRequest_PrintData >(arena);
 }
 template<> PROTOBUF_NOINLINE ::content_analysis::sdk::ContentAnalysisRequest*
 Arena::CreateMaybeMessage< ::content_analysis::sdk::ContentAnalysisRequest >(Arena* arena) {
