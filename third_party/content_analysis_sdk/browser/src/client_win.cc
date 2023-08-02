@@ -422,42 +422,6 @@ DWORD ClientWin::ConnectToPipe(const std::string& pipename, HANDLE* handle) {
   return ERROR_SUCCESS;
 }
 
-// static
-std::vector<char> ClientWin::ReadNextMessageFromPipe(HANDLE pipe) {
-  DWORD err = ERROR_SUCCESS;
-  std::vector<char> buffer(kBufferSize);
-  char* p = buffer.data();
-  int final_size = 0;
-  while (true) {
-    DWORD read;
-    if (ReadFile(pipe, p, kBufferSize, &read, nullptr)) {
-      final_size += read;
-      break;
-    } else {
-      err = GetLastError();
-      if (err != ERROR_MORE_DATA)
-        break;
-
-      // TODO - bug fix
-      final_size += static_cast<int>(read);
-      // TODO - possible bug fix, always keep buffer kBufferSize bigger than we
-      // need
-      buffer.resize(final_size + kBufferSize);
-      p = buffer.data() + buffer.size() - kBufferSize;
-    }
-  }
-  buffer.resize(final_size);
-  return buffer;
-}
-
-// static
-bool ClientWin::WriteMessageToPipe(HANDLE pipe, const std::string& message) {
-  if (message.empty())
-    return false;
-  DWORD written;
-  return WriteFile(pipe, message.data(), message.size(), &written, nullptr);
-}
-
 void ClientWin::Shutdown() {
   if (hPipe_ != INVALID_HANDLE_VALUE) {
     // TODO: This trips the LateWriteObserver.  We could move this earlier
