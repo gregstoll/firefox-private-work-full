@@ -26,9 +26,9 @@
 
 namespace {
 
+#define DLP_PER_USER 1
+
 #ifdef DLP_PER_USER
-// TODO: Docs are confusing here.  The name should be unique to the user but
-// must be the same for both the browser and the DLP?  How?
 static const char* kPipeName = "path_user";
 static bool kIsPerUser = true;
 #else
