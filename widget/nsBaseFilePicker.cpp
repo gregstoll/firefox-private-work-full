@@ -95,7 +95,7 @@ class ContentAnalysisPromiseListener : public PromiseNativeHandler {
       // TODO is this handle thing ok?
       JS::Handle<JSObject*> handle =
           JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-      JS::RootedValue actionValue(aCx);
+      JS::Rooted<JS::Value> actionValue(aCx);
       // JS_HasProperty(aCx, handle, "action", &found);
       if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
         if (actionValue.isNumber()) {
@@ -286,7 +286,6 @@ nsBaseFilePicker::nsBaseFilePicker()
 nsBaseFilePicker::~nsBaseFilePicker() = default;
 
 NS_IMETHODIMP nsBaseFilePicker::Init(mozIDOMWindowProxy* aParent,
-                                     mozilla::dom::Document* aOwnerDoc,
                                      const nsAString& aTitle,
                                      nsIFilePicker::Mode aMode) {
   MOZ_ASSERT(aParent,
@@ -294,10 +293,11 @@ NS_IMETHODIMP nsBaseFilePicker::Init(mozIDOMWindowProxy* aParent,
              "picker for you!");
 
   mParent = nsPIDOMWindowOuter::From(aParent);
+  Document* ownerDoc = mParent->GetExtantDoc();
 
   nsCOMPtr<nsIWidget> widget = WidgetUtils::DOMWindowToWidget(mParent);
   NS_ENSURE_TRUE(widget, NS_ERROR_FAILURE);
-  mInnerWindow = aOwnerDoc->GetInnerWindow();
+  mInnerWindow = ownerDoc->GetInnerWindow();
   nsAutoCString documentURIString;
   // TODO - is this right?
   nsresult rv = widget->GetInputContext().mURI->GetSpec(documentURIString);

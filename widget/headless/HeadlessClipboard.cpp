@@ -46,10 +46,7 @@ HeadlessClipboard::SetNativeClipboardData(nsITransferable* aTransferable,
 
 NS_IMETHODIMP
 HeadlessClipboard::GetData(
-    nsITransferable* aTransferable, int32_t aWhichClipboard,
-    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
-                     mozilla::dom::BrowserParent*>
-        aSource) {
+    nsITransferable* aTransferable, int32_t aWhichClipboard) {
   if (aWhichClipboard != kGlobalClipboard) {
     return NS_ERROR_NOT_IMPLEMENTED;
   }
@@ -105,11 +102,8 @@ HeadlessClipboard::IsClipboardTypeSupported(int32_t aWhichClipboard,
 }
 
 RefPtr<GenericPromise> HeadlessClipboard::AsyncGetData(
-    nsITransferable* aTransferable, int32_t aWhichClipboard,
-    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
-                     mozilla::dom::BrowserParent*>
-        aSource) {
-  nsresult rv = GetData(aTransferable, aWhichClipboard, aSource);
+    nsITransferable* aTransferable, int32_t aWhichClipboard) {
+  nsresult rv = GetData(aTransferable, aWhichClipboard);
   if (NS_FAILED(rv)) {
     return GenericPromise::CreateAndReject(rv, __func__);
   }

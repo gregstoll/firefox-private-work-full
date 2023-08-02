@@ -11,6 +11,8 @@ if CONFIG["ENABLE_TESTS"]:
         "../../../third_party/content_analysis_sdk/agent/src/agent_win.cc",
         "../../../third_party/content_analysis_sdk/agent/src/event_base.cc",
         "../../../third_party/content_analysis_sdk/agent/src/event_win.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/scoped_print_handle_base.cc",
+        "../../../third_party/content_analysis_sdk/agent/src/scoped_print_handle_win.cc",
         "../../../third_party/content_analysis_sdk/common/utils_win.cc",
         "../../../third_party/content_analysis_sdk/demo/agent.cc",
         "../../../toolkit/components/contentanalysis/content_analysis/sdk/analysis.pb.cc",

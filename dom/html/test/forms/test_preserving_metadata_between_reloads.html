@@ -57,8 +57,8 @@
             is(field.checkValidity(), false, "the validity of " + fieldId + " should be false after reload");
             callback();
           },
-          function () {
-            ok(false, "Failed to copy the string");
+          function (e) {
+            ok(false, "Failed to copy the string: " + e);
             SimpleTest.finish();
           }
         );

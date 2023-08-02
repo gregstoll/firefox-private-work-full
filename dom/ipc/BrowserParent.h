@@ -753,6 +753,18 @@ class BrowserParent final : public PBrowserParent,
 
   mozilla::ipc::IPCResult RecvShowDynamicToolbar();
 
+  mozilla::ipc::IPCResult RecvDoClipboardContentAnalysis(
+      const IPCTransferableData& aData,
+      DoClipboardContentAnalysisResolver&& aResolver);
+
+  mozilla::ipc::IPCResult RecvDoDragAndDropFilesContentAnalysis(
+      nsTArray<nsString>&& aFilePaths,
+      DoDragAndDropFilesContentAnalysisResolver&& aResolver);
+
+  mozilla::ipc::IPCResult RecvDoDragAndDropTextContentAnalysis(
+      nsString&& aText,
+      DoDragAndDropTextContentAnalysisResolver&& aResolver);
+
  private:
   void SuppressDisplayport(bool aEnabled);
 

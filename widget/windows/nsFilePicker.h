@@ -44,7 +44,7 @@ class nsFilePicker : public nsBaseWinFilePicker {
  public:
   nsFilePicker();
 
-  NS_IMETHOD Init(mozIDOMWindowProxy* aParent, mozilla::dom::Document* aOwnerDoc, const nsAString& aTitle,
+  NS_IMETHOD Init(mozIDOMWindowProxy* aParent, const nsAString& aTitle,
                   nsIFilePicker::Mode aMode) override;
 
   NS_DECL_ISUPPORTS

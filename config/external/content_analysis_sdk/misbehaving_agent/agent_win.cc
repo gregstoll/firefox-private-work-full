@@ -336,7 +336,7 @@ ResultCode AgentWin::Connection::BuildBrowserInfo() {
       OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, browser_info_.pid);
   if (hProc == nullptr) {
     return NotifyIfError("BuildBrowserInfo",
-                         ResultCode::ERR_CANNOT_OPEN_BROWSER_PROCESS);
+                         ResultCode::ERR_CANNOT_GET_BROWSER_PID);
   }
 
   auto rc = ResultCode::OK;

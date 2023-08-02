@@ -24,8 +24,8 @@ enum class NoContentAnalysisResult : uint8_t {
 
 struct MaybeContentAnalysisResult {
   MaybeContentAnalysisResult() : value(NoContentAnalysisResult::ERROR_OTHER) {}
-  MaybeContentAnalysisResult(int32_t response) : value(response) {}
-  MaybeContentAnalysisResult(NoContentAnalysisResult result) : value(result) {}
+  explicit MaybeContentAnalysisResult(int32_t response) : value(response) {}
+  explicit MaybeContentAnalysisResult(NoContentAnalysisResult result) : value(result) {}
   MaybeContentAnalysisResult(const MaybeContentAnalysisResult&) = default;
   MaybeContentAnalysisResult(MaybeContentAnalysisResult&&) = default;
   MaybeContentAnalysisResult& operator=(const MaybeContentAnalysisResult&) =

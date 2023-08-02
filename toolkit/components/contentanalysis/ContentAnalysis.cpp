@@ -26,9 +26,9 @@
 
 namespace {
 
+#define DLP_PER_USER 1
+
 #ifdef DLP_PER_USER
-// TODO: Docs are confusing here.  The name should be unique to the user but
-// must be the same for both the browser and the DLP?  How?
 static const char* kPipeName = "path_user";
 static bool kIsPerUser = true;
 #else
@@ -522,8 +522,12 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                       RefPtr<ContentAnalysisResponse> response =
                           ContentAnalysisResponse::FromProtobuf(
                               std::move(pbResponse));
-                      response->SetOwner(owner);
-                      promiseHolder.get()->MaybeResolve(std::move(response));
+                      if (response) {
+                        response->SetOwner(owner);
+                        promiseHolder.get()->MaybeResolve(std::move(response));
+                      } else {
+                        promiseHolder.get()->MaybeReject(NS_ERROR_FAILURE);
+                      }
                     } else {
                       promiseHolder.get()->MaybeReject(rv);
                     }

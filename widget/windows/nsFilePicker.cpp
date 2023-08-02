@@ -69,14 +69,13 @@ nsFilePicker::nsFilePicker() : mSelectedType(1) {}
 NS_IMPL_ISUPPORTS(nsFilePicker, nsIFilePicker)
 
 NS_IMETHODIMP nsFilePicker::Init(mozIDOMWindowProxy* aParent,
-                                 mozilla::dom::Document* aOwnerDoc,
                                  const nsAString& aTitle,
                                  nsIFilePicker::Mode aMode) {
   nsCOMPtr<nsPIDOMWindowOuter> window = do_QueryInterface(aParent);
   nsIDocShell* docShell = window ? window->GetDocShell() : nullptr;
   mLoadContext = do_QueryInterface(docShell);
 
-  return nsBaseFilePicker::Init(aParent, aOwnerDoc, aTitle, aMode);
+  return nsBaseFilePicker::Init(aParent, aTitle, aMode);
 }
 
 /*

@@ -233,9 +233,8 @@ bool FilePickerParent::CreateFilePicker() {
   if (!window) {
     return false;
   }
-  Document* ownerDoc = element->OwnerDoc();
 
-  return NS_SUCCEEDED(mFilePicker->Init(window, ownerDoc, mTitle, mMode));
+  return NS_SUCCEEDED(mFilePicker->Init(window, mTitle, mMode));
 }
 
 mozilla::ipc::IPCResult FilePickerParent::RecvOpen(
