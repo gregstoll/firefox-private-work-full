@@ -14,7 +14,7 @@
 
 using namespace content_analysis::sdk;
 
-AgentInfo LaunchAgentNormal(const wchar_t* aToBlock) {
+MozAgentInfo LaunchAgentNormal(const wchar_t* aToBlock) {
   nsString cmdLine =
       nsString(L"..\\..\\dist\\bin\\content_analysis_sdk_agent.exe");
   if (aToBlock && aToBlock[0] != 0) {
@@ -29,39 +29,39 @@ AgentInfo LaunchAgentNormal(const wchar_t* aToBlock) {
 
 TEST(ContentAnalysis, TextShouldNotBeBlocked)
 {
-  auto agentInfo = LaunchAgentNormal(L"block");
+  auto MozAgentInfo = LaunchAgentNormal(L"block");
   // Exit the test early if the process failed to launch
-  ASSERT_NE(agentInfo.processInfo.dwProcessId, 0UL);
-  EXPECT_NE(nullptr, agentInfo.client.get());
+  ASSERT_NE(MozAgentInfo.processInfo.dwProcessId, 0UL);
+  EXPECT_NE(nullptr, MozAgentInfo.client.get());
 
   ContentAnalysisRequest request;
   request.set_request_token("request token");
   request.set_text_content("should succeed");
   ContentAnalysisResponse response;
-  EXPECT_EQ(0, agentInfo.client->Send(request, &response));
+  EXPECT_EQ(0, MozAgentInfo.client->Send(request, &response));
   EXPECT_STREQ("request token", response.request_token().c_str());
   EXPECT_EQ(1, response.results().size());
   EXPECT_EQ(ContentAnalysisResponse_Result_Status_SUCCESS,
             response.results().Get(0).status());
   EXPECT_EQ(0, response.results().Get(0).triggered_rules_size());
 
-  BOOL terminateResult = ::TerminateProcess(agentInfo.processInfo.hProcess, 0);
+  BOOL terminateResult = ::TerminateProcess(MozAgentInfo.processInfo.hProcess, 0);
   EXPECT_NE(FALSE, terminateResult)
       << "Failed to terminate content_analysis_sdk_agent process";
 }
 
 TEST(ContentAnalysis, TextShouldBeBlocked)
 {
-  auto agentInfo = LaunchAgentNormal(L"block");
+  auto MozAgentInfo = LaunchAgentNormal(L"block");
   // Exit the test early if the process failed to launch
-  ASSERT_NE(agentInfo.processInfo.dwProcessId, 0UL);
-  EXPECT_NE(nullptr, agentInfo.client.get());
+  ASSERT_NE(MozAgentInfo.processInfo.dwProcessId, 0UL);
+  EXPECT_NE(nullptr, MozAgentInfo.client.get());
 
   ContentAnalysisRequest request;
   request.set_request_token("request token");
   request.set_text_content("should be blocked");
   ContentAnalysisResponse response;
-  EXPECT_EQ(0, agentInfo.client->Send(request, &response));
+  EXPECT_EQ(0, MozAgentInfo.client->Send(request, &response));
   EXPECT_STREQ("request token", response.request_token().c_str());
   EXPECT_EQ(1, response.results().size());
   EXPECT_EQ(ContentAnalysisResponse_Result_Status_SUCCESS,
@@ -70,46 +70,46 @@ TEST(ContentAnalysis, TextShouldBeBlocked)
   EXPECT_EQ(ContentAnalysisResponse_Result_TriggeredRule_Action_BLOCK,
             response.results().Get(0).triggered_rules(0).action());
 
-  BOOL terminateResult = ::TerminateProcess(agentInfo.processInfo.hProcess, 0);
+  BOOL terminateResult = ::TerminateProcess(MozAgentInfo.processInfo.hProcess, 0);
   EXPECT_NE(FALSE, terminateResult)
       << "Failed to terminate content_analysis_sdk_agent process";
 }
 
 TEST(ContentAnalysis, FileShouldNotBeBlocked)
 {
-  auto agentInfo = LaunchAgentNormal(L"blockedFileName");
+  auto MozAgentInfo = LaunchAgentNormal(L"blockedFileName");
   // Exit the test early if the process failed to launch
-  ASSERT_NE(agentInfo.processInfo.dwProcessId, 0UL);
-  EXPECT_NE(nullptr, agentInfo.client.get());
+  ASSERT_NE(MozAgentInfo.processInfo.dwProcessId, 0UL);
+  EXPECT_NE(nullptr, MozAgentInfo.client.get());
 
   ContentAnalysisRequest request;
   request.set_request_token("request token");
   request.set_file_path("c:\\temp\\allowedFileName.txt");
   ContentAnalysisResponse response;
-  EXPECT_EQ(0, agentInfo.client->Send(request, &response));
+  EXPECT_EQ(0, MozAgentInfo.client->Send(request, &response));
   EXPECT_STREQ("request token", response.request_token().c_str());
   EXPECT_EQ(1, response.results().size());
   EXPECT_EQ(ContentAnalysisResponse_Result_Status_SUCCESS,
             response.results().Get(0).status());
   EXPECT_EQ(0, response.results().Get(0).triggered_rules_size());
 
-  BOOL terminateResult = ::TerminateProcess(agentInfo.processInfo.hProcess, 0);
+  BOOL terminateResult = ::TerminateProcess(MozAgentInfo.processInfo.hProcess, 0);
   EXPECT_NE(FALSE, terminateResult)
       << "Failed to terminate content_analysis_sdk_agent process";
 }
 
 TEST(ContentAnalysis, FileShouldBeBlocked)
 {
-  auto agentInfo = LaunchAgentNormal(L"blockedFileName");
+  auto MozAgentInfo = LaunchAgentNormal(L"blockedFileName");
   // Exit the test early if the process failed to launch
-  ASSERT_NE(agentInfo.processInfo.dwProcessId, 0UL);
-  EXPECT_NE(nullptr, agentInfo.client.get());
+  ASSERT_NE(MozAgentInfo.processInfo.dwProcessId, 0UL);
+  EXPECT_NE(nullptr, MozAgentInfo.client.get());
 
   ContentAnalysisRequest request;
   request.set_request_token("request token");
   request.set_file_path("c:\\temp\\blockedFileName.txt");
   ContentAnalysisResponse response;
-  EXPECT_EQ(0, agentInfo.client->Send(request, &response));
+  EXPECT_EQ(0, MozAgentInfo.client->Send(request, &response));
   EXPECT_STREQ("request token", response.request_token().c_str());
   EXPECT_EQ(1, response.results().size());
   EXPECT_EQ(ContentAnalysisResponse_Result_Status_SUCCESS,
@@ -118,7 +118,7 @@ TEST(ContentAnalysis, FileShouldBeBlocked)
   EXPECT_EQ(ContentAnalysisResponse_Result_TriggeredRule_Action_BLOCK,
             response.results().Get(0).triggered_rules(0).action());
 
-  BOOL terminateResult = ::TerminateProcess(agentInfo.processInfo.hProcess, 0);
+  BOOL terminateResult = ::TerminateProcess(MozAgentInfo.processInfo.hProcess, 0);
   EXPECT_NE(FALSE, terminateResult)
       << "Failed to terminate content_analysis_sdk_agent process";
 }

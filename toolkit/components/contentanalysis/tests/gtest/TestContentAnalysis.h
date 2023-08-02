@@ -13,7 +13,7 @@
 #include <rpc.h>
 #include <windows.h>
 
-struct AgentInfo {
+struct MozAgentInfo {
   PROCESS_INFORMATION processInfo;
   std::unique_ptr<content_analysis::sdk::Client> client;
 };
@@ -30,7 +30,7 @@ nsString GeneratePipeName(const wchar_t* prefix) {
   return name;
 }
 
-AgentInfo LaunchAgentWithCommandLine(const nsString& cmdLine,
+MozAgentInfo LaunchAgentWithCommandLine(const nsString& cmdLine,
                                      const nsString& pipeName) {
   STARTUPINFOW startupInfo = {sizeof(startupInfo)};
   PROCESS_INFORMATION processInfo;
@@ -50,7 +50,7 @@ AgentInfo LaunchAgentWithCommandLine(const nsString& cmdLine,
   auto clientPtr = content_analysis::sdk::Client::Create(config);
   EXPECT_NE(nullptr, clientPtr.get());
 
-  return AgentInfo{processInfo, std::move(clientPtr)};
+  return MozAgentInfo{processInfo, std::move(clientPtr)};
 }
 
 #endif
