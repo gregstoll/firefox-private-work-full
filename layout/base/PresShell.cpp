@@ -8632,10 +8632,13 @@ NS_IMPL_ISUPPORTS0(ContentAnalysisDropPromiseListener)
 
 class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
  public:
-  SendDoDragAndDropFilesContentAnalysisRunnable(CondVar& promiseDone,
+  SendDoDragAndDropFilesContentAnalysisRunnable(
+      RefPtr<IPC::ContentAnalysisChild> aContentAnalysisChild,
+      CondVar& promiseDone,
       contentanalysis::MaybeContentAnalysisResult& promiseResult,
       const layers::LayersId aLayersId, nsTArray<nsString>&& aFilePaths)
       : Runnable("SendDoDragAndDropFilesContentAnalysisRunnable"),
+        mContentAnalysisChild(aContentAnalysisChild),
         mPromiseDone(promiseDone),
         mPromiseResult(promiseResult),
         mLayersId(aLayersId),
@@ -8668,6 +8671,8 @@ class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
 
  private:
   ~SendDoDragAndDropFilesContentAnalysisRunnable() override = default;
+
+  RefPtr<IPC::ContentAnalysisChild> mContentAnalysisChild;
   CondVar& mPromiseDone;
   contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
   layers::LayersId mLayersId;
@@ -8677,21 +8682,23 @@ class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
 // TODO - unify with the version in nsClipboardProxy.cpp?
 class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
  public:
-  SendDoDragAndDropTextContentAnalysisRunnable(CondVar& promiseDone,
-      contentanalysis::MaybeContentAnalysisResult& promiseResult,
+  SendDoDragAndDropTextContentAnalysisRunnable(
+      RefPtr<IPC::ContentAnalysisChild> aContentAnalysisChild,
+      CondVar& aPromiseDone,
+      contentanalysis::MaybeContentAnalysisResult& aPromiseResult,
       const layers::LayersId aLayersId, nsString&& aText)
       : Runnable("SendDoDragAndDropTextContentAnalysisRunnable"),
-        mPromiseDone(promiseDone),
-        mPromiseResult(promiseResult),
+        mContentAnalysisChild(aContentAnalysisChild),
+        mPromiseDone(aPromiseDone),
+        mPromiseResult(aPromiseResult),
         mLayersId(aLayersId),
-        mText(std::move(aText)){}
+        mText(std::move(aText)) {}
 
   NS_IMETHOD Run() override {
     CondVar& localPromiseDone = mPromiseDone;
     contentanalysis::MaybeContentAnalysisResult& localPromiseResult =
         mPromiseResult;
-    ContentChild::GetSingleton()
-        ->GetContentAnalysisChild()
+    mContentAnalysisChild
         ->SendDoDragAndDropTextContentAnalysis(mLayersId, std::move(mText))
         ->Then(
             GetCurrentSerialEventTarget(), __func__,
@@ -8713,6 +8720,8 @@ class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
 
  private:
   ~SendDoDragAndDropTextContentAnalysisRunnable() override = default;
+
+  RefPtr<IPC::ContentAnalysisChild> mContentAnalysisChild;
   CondVar& mPromiseDone;
   contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
   layers::LayersId mLayersId;
@@ -8890,11 +8899,14 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                 CondVar promiseDoneCondVar(promiseDoneMutex, "PresShell::EventHandler");
                 contentanalysis::MaybeContentAnalysisResult promiseResult;
                 RefPtr<SendDoDragAndDropFilesContentAnalysisRunnable> runnable =
-                    new SendDoDragAndDropFilesContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId, std::move(filePaths));
-                auto contentAnalysisEventTarget =
-                    ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
-                contentAnalysisEventTarget->Dispatch(runnable.forget(),
-                                                     nsIEventTarget::DISPATCH_NORMAL);
+                    new SendDoDragAndDropFilesContentAnalysisRunnable(
+                        ContentChild::GetSingleton()->GetContentAnalysisChild(),
+                        promiseDoneCondVar,
+                        promiseResult, layersId, std::move(filePaths));
+
+                auto et = ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
+                MOZ_ASSERT(et);
+                et->Dispatch(runnable.forget());
 
                 promiseDoneCondVar.Wait();
                 // TODO - I am concerned here that there could be memory coherency issues
@@ -8935,11 +8947,14 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                     CondVar promiseDoneCondVar(promiseDoneMutex, "PresShell::EventHandler");
                     contentanalysis::MaybeContentAnalysisResult promiseResult;
                     RefPtr<SendDoDragAndDropTextContentAnalysisRunnable> runnable =
-                        new SendDoDragAndDropTextContentAnalysisRunnable(promiseDoneCondVar, promiseResult, layersId, std::move(stringData));
-                    auto contentAnalysisEventTarget =
-                        ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
-                    contentAnalysisEventTarget->Dispatch(runnable.forget(),
-                                                         nsIEventTarget::DISPATCH_NORMAL);
+                        new SendDoDragAndDropTextContentAnalysisRunnable(
+                          ContentChild::GetSingleton()->GetContentAnalysisChild(),
+                          promiseDoneCondVar,
+                          promiseResult, layersId, std::move(stringData));
+
+                    auto et = ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
+                    MOZ_ASSERT(et);
+                    et->Dispatch(runnable.forget());
 
                     promiseDoneCondVar.Wait();
                     // TODO - I am concerned here that there could be memory coherency issues
