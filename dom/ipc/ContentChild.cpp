@@ -659,12 +659,7 @@ class DestroyContentAnalysisRunnable final : public Runnable {
 
 ContentChild::~ContentChild() {
   profiler_remove_state_change_callback(reinterpret_cast<uintptr_t>(this));
-  contentanalysis::ContentAnalysisChild* contentAnalysisChild = nullptr;
-  mContentAnalysisChild.forget(&contentAnalysisChild);
-  RefPtr<DestroyContentAnalysisRunnable> runnable =
-      new DestroyContentAnalysisRunnable(contentAnalysisChild);
-  mContentAnalysisEventTarget->Dispatch(runnable.forget(),
-                                        nsIEventTarget::DISPATCH_NORMAL);
+
 #ifndef NS_FREE_PERMANENT_DATA
   MOZ_CRASH("Content Child shouldn't be destroyed.");
 #endif
@@ -2234,6 +2229,16 @@ void ContentChild::ActorDestroy(ActorDestroyReason why) {
 #else
   // Destroy our JSProcessActors, and reject any pending queries.
   JSActorDidDestroy();
+
+  // Destroy content analysis child on its thread
+  if (mContentAnalysisChild) {
+    contentanalysis::ContentAnalysisChild* contentAnalysisChild = nullptr;
+    mContentAnalysisChild.forget(&contentAnalysisChild);
+    RefPtr<DestroyContentAnalysisRunnable> runnable =
+        new DestroyContentAnalysisRunnable(contentAnalysisChild);
+    mContentAnalysisEventTarget->Dispatch(runnable.forget(),
+                                          nsIEventTarget::DISPATCH_NORMAL);
+  }
 
 #  if defined(XP_WIN)
   RefPtr<DllServices> dllSvc(DllServices::Get());
