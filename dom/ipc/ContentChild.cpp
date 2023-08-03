@@ -644,7 +644,7 @@ ContentChild::ContentChild()
 
 class DestroyContentAnalysisRunnable final : public Runnable {
  public:
-  DestroyContentAnalysisRunnable(contentanalysis::ContentAnalysisChild* aChild)
+  explicit DestroyContentAnalysisRunnable(contentanalysis::ContentAnalysisChild* aChild)
       : Runnable("DestroyContentAnalysisRunnable"), mChild(aChild) {}
 
   NS_IMETHOD Run() override {

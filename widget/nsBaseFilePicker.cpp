@@ -95,7 +95,7 @@ class ContentAnalysisPromiseListener : public PromiseNativeHandler {
       // TODO is this handle thing ok?
       JS::Handle<JSObject*> handle =
           JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-      JS::RootedValue actionValue(aCx);
+      JS::Rooted<JS::Value> actionValue(aCx);
       // JS_HasProperty(aCx, handle, "action", &found);
       if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
         if (actionValue.isNumber()) {

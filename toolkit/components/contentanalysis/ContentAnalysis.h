@@ -87,7 +87,7 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
 
  private:
   virtual ~ContentAnalysisResponse() = default;
-  ContentAnalysisResponse(
+  explicit ContentAnalysisResponse(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
 
   // See nsIContentAnalysisResponse for values

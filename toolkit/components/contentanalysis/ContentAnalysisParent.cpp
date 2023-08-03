@@ -39,7 +39,7 @@ class ContentAnalysisPromiseListener
       auto* obj = aValue.toObjectOrNull();
       JS::Handle<JSObject*> handle =
           JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-      JS::RootedValue actionValue(aCx);
+      JS::Rooted<JS::Value> actionValue(aCx);
       if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
         if (actionValue.isNumber()) {
           double actionNumber = actionValue.toNumber();

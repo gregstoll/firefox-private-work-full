@@ -26,7 +26,7 @@ using DataFlavorsPromise = mozilla::MozPromise<nsTArray<nsCString>, nsresult, tr
 
 interface nsIArray;
 
-native ClipboardDocumentSourceType(mozilla::dom::ClipboardDocumentSource);
+[ref] native ClipboardDocumentSourceType(const mozilla::dom::ClipboardDocumentSource);
 native AsyncGetDataPromise(RefPtr<mozilla::GenericPromise>);
 native AsyncDataFlavorsPromise(RefPtr<DataFlavorsPromise>);
 

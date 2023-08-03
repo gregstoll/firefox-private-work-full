@@ -23,7 +23,7 @@ class HeadlessClipboard final : public ClipboardSetDataHelper {
   // nsIClipboard
   NS_IMETHOD GetData(nsITransferable* aTransferable,
                      int32_t aWhichClipboard,
-                     mozilla::dom::ClipboardDocumentSource aSource) override;
+                     const mozilla::dom::ClipboardDocumentSource& aSource) override;
   NS_IMETHOD EmptyClipboard(int32_t aWhichClipboard) override;
   NS_IMETHOD HasDataMatchingFlavors(const nsTArray<nsCString>& aFlavorList,
                                     int32_t aWhichClipboard,
@@ -32,9 +32,7 @@ class HeadlessClipboard final : public ClipboardSetDataHelper {
                                       bool* _retval) override;
   RefPtr<mozilla::GenericPromise> AsyncGetData(
       nsITransferable* aTransferable, int32_t aWhichClipboard,
-      mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
-                       mozilla::dom::BrowserParent*>
-        aSource) override;
+      const mozilla::dom::ClipboardDocumentSource& aSource) override;
   RefPtr<DataFlavorsPromise> AsyncHasDataMatchingFlavors(
       const nsTArray<nsCString>& aFlavorList, int32_t aWhichClipboard) override;
 

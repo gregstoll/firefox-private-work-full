@@ -88,7 +88,7 @@ class SendDoClipboardContentAnalysisSyncRunnable final : public Runnable {
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
             [&localPromiseDone, &localPromiseResult](
-                contentanalysis::MaybeContentAnalysisResult result) {
+                const contentanalysis::MaybeContentAnalysisResult& result) {
               localPromiseResult = result;
               localPromiseDone.Notify();
             },
@@ -129,7 +129,7 @@ class SendDoClipboardContentAnalysisAsyncRunnable final : public Runnable {
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
             [localPromise](
-                contentanalysis::MaybeContentAnalysisResult result) {
+                const contentanalysis::MaybeContentAnalysisResult& result) {
                 bool allowCopy = result.ShouldAllowContent();
                 if (!allowCopy) {
                   // TODO - more specific?
@@ -154,9 +154,8 @@ class SendDoClipboardContentAnalysisAsyncRunnable final : public Runnable {
 
 NS_IMETHODIMP
 nsClipboardProxy::GetData(nsITransferable* aTransferable,
-                          int32_t aWhichClipboard,
-                          Variant<Nothing, dom::Document*, dom::BrowserParent*>
-                              aSource) {
+    int32_t aWhichClipboard,
+    const Variant<Nothing, dom::Document*, dom::BrowserParent*>& aSource) {
   nsTArray<nsCString> types;
   aTransferable->FlavorsTransferableCanImport(types);
 
@@ -292,9 +291,8 @@ RefPtr<DataFlavorsPromise> nsClipboardProxy::AsyncHasDataMatchingFlavors(
 
 RefPtr<GenericPromise> nsClipboardProxy::AsyncGetData(
     nsITransferable* aTransferable, int32_t aWhichClipboard,
-    mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
-                     mozilla::dom::BrowserParent*>
-        aSource) {
+    const mozilla::Variant<mozilla::Nothing, mozilla::dom::Document*,
+                     mozilla::dom::BrowserParent*>& aSource) {
   if (!aTransferable) {
     return GenericPromise::CreateAndReject(NS_ERROR_FAILURE, __func__);
   }
@@ -308,13 +306,12 @@ RefPtr<GenericPromise> nsClipboardProxy::AsyncGetData(
 
   nsCOMPtr<nsITransferable> transferable(aTransferable);
   auto promise = MakeRefPtr<GenericPromise::Private>(__func__);
-  BrowserChild* browserChild = nullptr;
+  RefPtr<BrowserChild> browserChild;
   if (aSource.is<Document*>()) {
     browserChild =
         BrowserChild::GetFrom(aSource.as<Document*>()->GetDocShell());
-  } else if (aSource.is<BrowserParent*>()) {
-    browserChild = nullptr;
   }
+
   ContentChild::GetSingleton()
       ->SendGetClipboardAsync(flavors, aWhichClipboard, browserChild)
       ->Then(

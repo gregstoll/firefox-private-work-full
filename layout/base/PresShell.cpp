@@ -8588,7 +8588,7 @@ class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
         mEventStatus(aEventStatus),
         mEventCBPtr(aEventCBPtr) {}
 
-   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+   MOZ_CAN_RUN_SCRIPT virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
      mozilla::ErrorResult& aRv) override {
       // TODO synchronization
       // TODO error checking
@@ -8596,7 +8596,7 @@ class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
       if (aValue.isObject()) {
         auto* obj = aValue.toObjectOrNull();
         JS::Handle<JSObject*> handle = JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-        JS::RootedValue actionValue(aCx);
+        JS::Rooted<JS::Value> actionValue(aCx);
         if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
           if (actionValue.isNumber()) {
             double actionNumber = actionValue.toNumber();
@@ -8609,8 +8609,8 @@ class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
         }
       }
       if (allowDrop) {
-        EventDispatcher::Dispatch(mEventTarget, mPresContext, mEvent, nullptr,
-                                  mEventStatus, mEventCBPtr);
+        EventDispatcher::Dispatch(MOZ_KnownLive(ToSupports(mEventTarget)),
+            MOZ_KnownLive(mPresContext), mEvent, nullptr, mEventStatus, mEventCBPtr);
       }
    }
    
@@ -8652,7 +8652,7 @@ class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
             [&localPromiseDone, &localPromiseResult](
-                contentanalysis::MaybeContentAnalysisResult result) {
+                const contentanalysis::MaybeContentAnalysisResult& result) {
               localPromiseResult = result;
               localPromiseDone.Notify();
             },
@@ -8697,7 +8697,7 @@ class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
             [&localPromiseDone, &localPromiseResult](
-                contentanalysis::MaybeContentAnalysisResult result) {
+                const contentanalysis::MaybeContentAnalysisResult& result) {
               localPromiseResult = result;
               localPromiseDone.Notify();
             },
