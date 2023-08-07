@@ -93,12 +93,6 @@ void Clipboard::ReadRequest::Answer() {
   }
 
   nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboardService);
-  if (!clipboardProxy) {
-    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
-    MOZ_ASSERT(XRE_IsContentProcess());
-    p->MaybeReject(NS_ERROR_UNEXPECTED);
-    return;
-  }
 
   switch (mType) {
     case ReadRequestType::eRead: {
@@ -162,30 +156,55 @@ void Clipboard::ReadRequest::Answer() {
       trans->AddDataFlavor(kTextMime);
 
       auto* browserChild = BrowserChild::GetFrom(owner->GetDoc()->GetDocShell());
-      MOZ_ASSERT(browserChild);
-      clipboardProxy->AsyncGetDataWithBrowserCheck(trans, nsIClipboard::kGlobalClipboard, browserChild)
-          ->Then(
-              GetMainThreadSerialEventTarget(), __func__,
-              /* resolve */
-              [trans, p]() {
-                nsCOMPtr<nsISupports> data;
-                nsresult rv =
-                    trans->GetTransferData(kTextMime, getter_AddRefs(data));
+      if (browserChild && clipboardProxy) {
+        clipboardProxy->AsyncGetDataWithBrowserCheck(trans, nsIClipboard::kGlobalClipboard, browserChild)
+            ->Then(
+                GetMainThreadSerialEventTarget(), __func__,
+                /* resolve */
+                [trans, p]() {
+                  nsCOMPtr<nsISupports> data;
+                  nsresult rv =
+                      trans->GetTransferData(kTextMime, getter_AddRefs(data));
 
-                nsAutoString str;
-                if (!NS_WARN_IF(NS_FAILED(rv))) {
-                  nsCOMPtr<nsISupportsString> supportsstr =
-                      do_QueryInterface(data);
-                  MOZ_ASSERT(supportsstr);
-                  if (supportsstr) {
-                    supportsstr->GetData(str);
+                  nsAutoString str;
+                  if (!NS_WARN_IF(NS_FAILED(rv))) {
+                    nsCOMPtr<nsISupportsString> supportsstr =
+                        do_QueryInterface(data);
+                    MOZ_ASSERT(supportsstr);
+                    if (supportsstr) {
+                      supportsstr->GetData(str);
+                    }
                   }
-                }
 
-                p->MaybeResolve(str);
-              },
-              /* reject */
-              [p](nsresult rv) { p->MaybeReject(rv); });
+                  p->MaybeResolve(str);
+                },
+                /* reject */
+                [p](nsresult rv) { p->MaybeReject(rv); });
+      } else {
+        clipboardService->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
+            ->Then(
+                GetMainThreadSerialEventTarget(), __func__,
+                /* resolve */
+                [trans, p]() {
+                  nsCOMPtr<nsISupports> data;
+                  nsresult rv =
+                      trans->GetTransferData(kTextMime, getter_AddRefs(data));
+
+                  nsAutoString str;
+                  if (!NS_WARN_IF(NS_FAILED(rv))) {
+                    nsCOMPtr<nsISupportsString> supportsstr =
+                        do_QueryInterface(data);
+                    MOZ_ASSERT(supportsstr);
+                    if (supportsstr) {
+                      supportsstr->GetData(str);
+                    }
+                  }
+
+                  p->MaybeResolve(str);
+                },
+                /* reject */
+                [p](nsresult rv) { p->MaybeReject(rv); });
+          }
       break;
     }
     default: {

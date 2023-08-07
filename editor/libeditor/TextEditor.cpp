@@ -559,13 +559,6 @@ nsresult TextEditor::HandlePasteAsQuotation(
     return rv;
   }
 
-  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
-  if (!clipboardProxy) {
-    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
-    MOZ_ASSERT(XRE_IsContentProcess());
-    return NS_ERROR_UNEXPECTED;
-  }
-
   // XXX Why don't we dispatch ePaste event here?
 
   // Get the nsITransferable interface for getting the data from the clipboard
@@ -585,8 +578,12 @@ nsresult TextEditor::HandlePasteAsQuotation(
 
   // Get the Data from the clipboard
   auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
-  MOZ_ASSERT(browserChild);
-  clipboardProxy->GetDataWithBrowserCheck(trans, aClipboardType, browserChild);
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (browserChild && clipboardProxy) {
+    clipboardProxy->GetDataWithBrowserCheck(trans, aClipboardType, browserChild);
+  } else {
+    clipboard->GetData(trans, aClipboardType);
+  }
 
   // Now we ask the transferable for the data
   // it still owns the data, we just have a pointer to it.

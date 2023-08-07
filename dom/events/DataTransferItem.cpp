@@ -175,19 +175,18 @@ void DataTransferItem::FillInExternalData() {
       }
 
       nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
-      if (!clipboardProxy) {
-        NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
-        MOZ_ASSERT(XRE_IsContentProcess());
-        return;
-      }
-
       nsCOMPtr<nsIGlobalObject> global = GetGlobalFromDataTransfer();
       nsGlobalWindowInner* inner = nsGlobalWindowInner::Cast(global->AsInnerWindow());
 
       auto* browserChild = BrowserChild::GetFrom(inner->GetDocument()->GetDocShell());
-      MOZ_ASSERT(browserChild);
-      nsresult rv = clipboardProxy->GetDataWithBrowserCheck(
-          trans, mDataTransfer->ClipboardType(), browserChild);
+      nsresult rv;
+      if(browserChild && clipboardProxy) {
+        rv = clipboardProxy->GetDataWithBrowserCheck(
+            trans, mDataTransfer->ClipboardType(), browserChild);
+      } else {
+        rv = clipboard->GetData(trans, mDataTransfer->ClipboardType());
+      }
+      
       if (NS_WARN_IF(NS_FAILED(rv))) {
         return;
       }

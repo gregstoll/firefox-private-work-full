@@ -2306,13 +2306,6 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
     return rv;
   }
 
-  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
-  if (!clipboardProxy) {
-    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
-    MOZ_ASSERT(XRE_IsContentProcess());
-    return NS_ERROR_UNEXPECTED;
-  }
-
   // Get the nsITransferable interface for getting the data from the clipboard
   nsCOMPtr<nsITransferable> transferable;
   rv = PrepareHTMLTransferable(getter_AddRefs(transferable));
@@ -2326,9 +2319,14 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
   }
   // Get the Data from the clipboard
   auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
-  MOZ_ASSERT(browserChild);
-  rv = clipboardProxy->GetDataWithBrowserCheck(
-      transferable, aClipboardType, browserChild);
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (browserChild && clipboardProxy) {
+    rv = clipboardProxy->GetDataWithBrowserCheck(
+        transferable, aClipboardType, browserChild);
+  } else {
+    rv = clipboard->GetData(transferable, aClipboardType);
+  }
+
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed");
     return rv;
@@ -2362,10 +2360,16 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
     NS_WARNING_ASSERTION(
         NS_SUCCEEDED(rvIgnored),
         "nsITransferable::AddDataFlavor(kHTMLContext) failed, but ignored");
-    rvIgnored = clipboardProxy->GetDataWithBrowserCheck(
-        contextTransferable, aClipboardType, browserChild);
+
+    if (browserChild && clipboardProxy) {
+      rvIgnored = clipboardProxy->GetDataWithBrowserCheck(
+          contextTransferable, aClipboardType, browserChild);
+    } else {
+      rvIgnored = clipboard->GetData(contextTransferable, aClipboardType);
+    }
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
                          "nsIClipboard::GetData() failed, but ignored");
+
     nsCOMPtr<nsISupports> contextDataObj;
     rv = contextTransferable->GetTransferData(kHTMLContext,
                                               getter_AddRefs(contextDataObj));
@@ -2393,10 +2397,16 @@ nsresult HTMLEditor::PasteInternal(int32_t aClipboardType) {
     NS_WARNING_ASSERTION(
         NS_SUCCEEDED(rvIgnored),
         "nsITransferable::AddDataFlavor(kHTMLInfo) failed, but ignored");
-    clipboardProxy->GetDataWithBrowserCheck(
-        infoTransferable, aClipboardType, browserChild);
+
+    if (browserChild && clipboardProxy) {
+      clipboardProxy->GetDataWithBrowserCheck(
+          infoTransferable, aClipboardType, browserChild);
+    } else {
+      clipboard->GetData(infoTransferable, aClipboardType);
+    }
     NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
                          "nsIClipboard::GetData() failed, but ignored");
+
     nsCOMPtr<nsISupports> infoDataObj;
     rv = infoTransferable->GetTransferData(kHTMLInfo,
                                            getter_AddRefs(infoDataObj));
@@ -2556,13 +2566,6 @@ nsresult HTMLEditor::PasteNoFormattingAsAction(
     return rv;
   }
 
-  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
-  if (!clipboardProxy) {
-    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
-    MOZ_ASSERT(XRE_IsContentProcess());
-    return NS_ERROR_UNEXPECTED;
-  }
-
   if (!GetDocument()) {
     NS_WARNING("Editor didn't have document, but ignored");
     return NS_OK;
@@ -2588,8 +2591,13 @@ nsresult HTMLEditor::PasteNoFormattingAsAction(
 
   // Get the Data from the clipboard
   auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
-  MOZ_ASSERT(browserChild);
-  rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType, browserChild);
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (browserChild && clipboardProxy) {
+    rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType, browserChild);
+  } else {
+    rv = clipboard->GetData(transferable, aClipboardType);
+  }
+
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed");
     return rv;
@@ -2820,12 +2828,6 @@ nsresult HTMLEditor::PasteAsPlaintextQuotation(int32_t aSelectionType) {
     return rv;
   }
 
-  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
-  if (!clipboardProxy) {
-    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
-    MOZ_ASSERT(XRE_IsContentProcess());
-    return NS_ERROR_UNEXPECTED;
-  }
 
   // Create generic Transferable for getting the data
   nsCOMPtr<nsITransferable> transferable =
@@ -2853,9 +2855,13 @@ nsresult HTMLEditor::PasteAsPlaintextQuotation(int32_t aSelectionType) {
 
   // Get the Data from the clipboard
   auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
-  MOZ_ASSERT(browserChild);
-  rvIgnored = clipboardProxy->GetDataWithBrowserCheck(
-      transferable, aSelectionType, browserChild);
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (browserChild && clipboardProxy) {
+    rvIgnored = clipboardProxy->GetDataWithBrowserCheck(
+        transferable, aSelectionType, browserChild);
+  } else {
+    rvIgnored = clipboard->GetData(transferable, aSelectionType);
+  }
   NS_WARNING_ASSERTION(NS_SUCCEEDED(rvIgnored),
                        "nsIClipboard::GetData() failed, but ignored");
 

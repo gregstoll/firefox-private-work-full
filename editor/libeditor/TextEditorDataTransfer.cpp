@@ -180,13 +180,6 @@ nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
     return rv;
   }
 
-  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
-  if (!clipboardProxy) {
-    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
-    MOZ_ASSERT(XRE_IsContentProcess());
-    return NS_ERROR_UNEXPECTED;
-  }
-
   // Get the nsITransferable interface for getting the data from the clipboard
   Result<nsCOMPtr<nsITransferable>, nsresult> maybeTransferable =
       EditorUtils::CreateTransferableForPlainText(*GetDocument());
@@ -201,14 +194,21 @@ nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
         "ignored");
     return NS_OK;  // XXX Why?
   }
+
   // Get the Data from the clipboard.
   auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
-  MOZ_ASSERT(browserChild);
-  rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType, browserChild);
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (browserChild && clipboardProxy) {
+    rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType, browserChild);
+  } else {
+    rv = clipboard->GetData(transferable, aClipboardType);
+  }
+
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed, but ignored");
     return NS_OK;  // XXX Why?
   }
+
   // XXX Why don't we check this first?
   if (!IsModifiable()) {
     return NS_OK;
