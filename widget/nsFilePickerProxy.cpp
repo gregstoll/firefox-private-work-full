@@ -25,7 +25,6 @@ nsFilePickerProxy::~nsFilePickerProxy() = default;
 
 NS_IMETHODIMP
 nsFilePickerProxy::Init(mozIDOMWindowProxy* aParent, 
-                        mozilla::dom::Document* aOwnerDoc,
                         const nsAString& aTitle,
                         nsIFilePicker::Mode aMode) {
   BrowserChild* browserChild = BrowserChild::GetFrom(aParent);

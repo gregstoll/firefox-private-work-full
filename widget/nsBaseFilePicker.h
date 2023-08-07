@@ -26,7 +26,7 @@ class nsBaseFilePicker : public nsIFilePicker {
   nsBaseFilePicker();
   virtual ~nsBaseFilePicker();
 
-  NS_IMETHOD Init(mozIDOMWindowProxy* aParent, mozilla::dom::Document* aOwnerDoc, const nsAString& aTitle,
+  NS_IMETHOD Init(mozIDOMWindowProxy* aParent, const nsAString& aTitle,
                   nsIFilePicker::Mode aMode) override;
 
   NS_IMETHOD Open(nsIFilePickerShownCallback* aCallback) override;

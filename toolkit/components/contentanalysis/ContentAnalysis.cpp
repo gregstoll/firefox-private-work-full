@@ -522,8 +522,12 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                       RefPtr<ContentAnalysisResponse> response =
                           ContentAnalysisResponse::FromProtobuf(
                               std::move(pbResponse));
-                      response->SetOwner(owner);
-                      promiseHolder.get()->MaybeResolve(std::move(response));
+                      if (response) {
+                        response->SetOwner(owner);
+                        promiseHolder.get()->MaybeResolve(std::move(response));
+                      } else {
+                        promiseHolder.get()->MaybeReject(NS_ERROR_FAILURE);
+                      }
                     } else {
                       promiseHolder.get()->MaybeReject(rv);
                     }
