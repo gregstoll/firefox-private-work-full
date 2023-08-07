@@ -1201,6 +1201,7 @@ SimpleTest.promiseClipboardChange = async function (
     await operationFn();
 
     let data;
+    console.log("putAndVerify 1");
     for (let i = 0; i < maxPolls; i++) {
       data = SpecialPowers.getClipboardData(flavor);
       if (validatorFn(data)) {
@@ -1223,6 +1224,7 @@ SimpleTest.promiseClipboardChange = async function (
       });
     }
 
+    console.log("putAndVerify 2");
     let errorMsg = `Timed out while polling clipboard for ${
       preExpectedVal ? "initialized" : "requested"
     } data, got: ${data}`;

@@ -753,6 +753,14 @@ class BrowserParent final : public PBrowserParent,
 
   mozilla::ipc::IPCResult RecvShowDynamicToolbar();
 
+  mozilla::ipc::IPCResult RecvDoClipboardContentAnalysis(
+      const IPCTransferableData& aData,
+      DoClipboardContentAnalysisResolver&& aResolver);
+
+  mozilla::ipc::IPCResult RecvDoClipboardContentAnalysisSync(
+      const IPCTransferableData& aData,
+      MaybeContentAnalysisResult* aResult);
+
  private:
   void SuppressDisplayport(bool aEnabled);
 

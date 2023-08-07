@@ -11,6 +11,7 @@
 
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/MouseEvents.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/DataTransfer.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/DocumentInlines.h"
@@ -18,6 +19,7 @@
 
 #include "nsAString.h"
 #include "nsCOMPtr.h"
+#include "nsClipboardProxy.h"
 #include "nsContentUtils.h"
 #include "nsDebug.h"
 #include "nsError.h"
@@ -178,6 +180,13 @@ nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
     return rv;
   }
 
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (!clipboardProxy) {
+    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
+    MOZ_ASSERT(XRE_IsContentProcess());
+    return NS_ERROR_UNEXPECTED;
+  }
+
   // Get the nsITransferable interface for getting the data from the clipboard
   Result<nsCOMPtr<nsITransferable>, nsresult> maybeTransferable =
       EditorUtils::CreateTransferableForPlainText(*GetDocument());
@@ -193,8 +202,9 @@ nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
     return NS_OK;  // XXX Why?
   }
   // Get the Data from the clipboard.
-  rv = clipboard->GetData(transferable, aClipboardType,
-                          AsVariant(GetDocument()));
+  auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
+  MOZ_ASSERT(browserChild);
+  rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType, browserChild);
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed, but ignored");
     return NS_OK;  // XXX Why?

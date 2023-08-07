@@ -8636,12 +8636,12 @@ class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
       RefPtr<IPC::ContentAnalysisChild> aContentAnalysisChild,
       CondVar& promiseDone,
       contentanalysis::MaybeContentAnalysisResult& promiseResult,
-      const layers::LayersId aLayersId, nsTArray<nsString>&& aFilePaths)
+      RefPtr<BrowserChild> aBrowserChild, nsTArray<nsString>&& aFilePaths)
       : Runnable("SendDoDragAndDropFilesContentAnalysisRunnable"),
         mContentAnalysisChild(aContentAnalysisChild),
         mPromiseDone(promiseDone),
         mPromiseResult(promiseResult),
-        mLayersId(aLayersId),
+        mBrowserChild(aBrowserChild),
         mFilePaths(std::move(aFilePaths)){}
 
   NS_IMETHOD Run() override {
@@ -8650,7 +8650,7 @@ class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
         mPromiseResult;
     ContentChild::GetSingleton()
         ->GetContentAnalysisChild()
-        ->SendDoDragAndDropFilesContentAnalysis(mLayersId, std::move(mFilePaths))
+        ->SendDoDragAndDropFilesContentAnalysis(mBrowserChild, std::move(mFilePaths))
         ->Then(
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
@@ -8675,7 +8675,7 @@ class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
   RefPtr<IPC::ContentAnalysisChild> mContentAnalysisChild;
   CondVar& mPromiseDone;
   contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
-  layers::LayersId mLayersId;
+  RefPtr<BrowserChild> mBrowserChild;
   nsTArray<nsString> mFilePaths;
 };
 
@@ -8686,12 +8686,12 @@ class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
       RefPtr<IPC::ContentAnalysisChild> aContentAnalysisChild,
       CondVar& aPromiseDone,
       contentanalysis::MaybeContentAnalysisResult& aPromiseResult,
-      const layers::LayersId aLayersId, nsString&& aText)
+      RefPtr<BrowserChild> aBrowserChild, nsString&& aText)
       : Runnable("SendDoDragAndDropTextContentAnalysisRunnable"),
         mContentAnalysisChild(aContentAnalysisChild),
         mPromiseDone(aPromiseDone),
         mPromiseResult(aPromiseResult),
-        mLayersId(aLayersId),
+        mBrowserChild(aBrowserChild),
         mText(std::move(aText)) {}
 
   NS_IMETHOD Run() override {
@@ -8699,7 +8699,7 @@ class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
     contentanalysis::MaybeContentAnalysisResult& localPromiseResult =
         mPromiseResult;
     mContentAnalysisChild
-        ->SendDoDragAndDropTextContentAnalysis(mLayersId, std::move(mText))
+        ->SendDoDragAndDropTextContentAnalysis(mBrowserChild, std::move(mText))
         ->Then(
             GetCurrentSerialEventTarget(), __func__,
             /* resolve */
@@ -8724,7 +8724,7 @@ class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
   RefPtr<IPC::ContentAnalysisChild> mContentAnalysisChild;
   CondVar& mPromiseDone;
   contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
-  layers::LayersId mLayersId;
+  RefPtr<BrowserChild> mBrowserChild;
   nsString mText;
 };
 
@@ -8891,7 +8891,8 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
               if (!filePaths.IsEmpty()) {
                 BrowserChild* browserChild =
                     BrowserChild::GetFrom(presContext->GetDocShell());
-                layers::LayersId layersId = browserChild->GetLayersId();
+                MOZ_ASSERT(browserChild);
+
                 Mutex promiseDoneMutex("PresShell::EventHandler");
                 // TODO there may be a more idiomatic way to do this than to use a CondVar
                 // with an already-locked Mutex
@@ -8902,7 +8903,7 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                     new SendDoDragAndDropFilesContentAnalysisRunnable(
                         ContentChild::GetSingleton()->GetContentAnalysisChild(),
                         promiseDoneCondVar,
-                        promiseResult, layersId, std::move(filePaths));
+                        promiseResult, browserChild, std::move(filePaths));
 
                 auto et = ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
                 MOZ_ASSERT(et);
@@ -8939,7 +8940,8 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                   if (NS_SUCCEEDED(rv)) {
                     BrowserChild* browserChild =
                         BrowserChild::GetFrom(presContext->GetDocShell());
-                    layers::LayersId layersId = browserChild->GetLayersId();
+                    MOZ_ASSERT(browserChild);
+
                     Mutex promiseDoneMutex("PresShell::EventHandler");
                     // TODO there may be a more idiomatic way to do this than to use a CondVar
                     // with an already-locked Mutex
@@ -8950,7 +8952,7 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
                         new SendDoDragAndDropTextContentAnalysisRunnable(
                           ContentChild::GetSingleton()->GetContentAnalysisChild(),
                           promiseDoneCondVar,
-                          promiseResult, layersId, std::move(stringData));
+                          promiseResult, browserChild, std::move(stringData));
 
                     auto et = ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
                     MOZ_ASSERT(et);

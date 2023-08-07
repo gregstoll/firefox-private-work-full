@@ -14,6 +14,7 @@
 #include "mozilla/Result.h"
 #include "mozilla/ResultVariant.h"
 #include "mozilla/dom/BlobBinding.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/ClipboardItem.h"
 #include "mozilla/dom/ClipboardBinding.h"
 #include "mozilla/dom/ContentChild.h"
@@ -27,6 +28,7 @@
 #include "imgIContainer.h"
 #include "imgITools.h"
 #include "nsArrayUtils.h"
+#include "nsClipboardProxy.h"
 #include "nsComponentManagerUtils.h"
 #include "nsContentUtils.h"
 #include "nsIClipboard.h"
@@ -86,6 +88,14 @@ void Clipboard::ReadRequest::Answer() {
   nsCOMPtr<nsIClipboard> clipboardService(
       do_GetService("@mozilla.org/widget/clipboard;1", &rv));
   if (NS_FAILED(rv)) {
+    p->MaybeReject(NS_ERROR_UNEXPECTED);
+    return;
+  }
+
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboardService);
+  if (!clipboardProxy) {
+    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
+    MOZ_ASSERT(XRE_IsContentProcess());
     p->MaybeReject(NS_ERROR_UNEXPECTED);
     return;
   }
@@ -150,7 +160,10 @@ void Clipboard::ReadRequest::Answer() {
 
       trans->Init(nullptr);
       trans->AddDataFlavor(kTextMime);
-      clipboardService->AsyncGetData(trans, nsIClipboard::kGlobalClipboard, AsVariant(owner->GetDoc()))
+
+      auto* browserChild = BrowserChild::GetFrom(owner->GetDoc()->GetDocShell());
+      MOZ_ASSERT(browserChild);
+      clipboardProxy->AsyncGetDataWithBrowserCheck(trans, nsIClipboard::kGlobalClipboard, browserChild)
           ->Then(
               GetMainThreadSerialEventTarget(), __func__,
               /* resolve */

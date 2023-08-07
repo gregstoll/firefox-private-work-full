@@ -28,6 +28,7 @@
 #include "mozilla/TextComposition.h"
 #include "mozilla/TextEvents.h"
 #include "mozilla/TextServicesDocument.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/Event.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/Selection.h"
@@ -37,6 +38,7 @@
 #include "nsCRT.h"
 #include "nsCaret.h"
 #include "nsCharTraits.h"
+#include "nsClipboardProxy.h"
 #include "nsComponentManagerUtils.h"
 #include "nsContentCID.h"
 #include "nsContentList.h"
@@ -557,6 +559,13 @@ nsresult TextEditor::HandlePasteAsQuotation(
     return rv;
   }
 
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (!clipboardProxy) {
+    NS_WARNING("Clipboard was not proxy?  Is this not a content process?");
+    MOZ_ASSERT(XRE_IsContentProcess());
+    return NS_ERROR_UNEXPECTED;
+  }
+
   // XXX Why don't we dispatch ePaste event here?
 
   // Get the nsITransferable interface for getting the data from the clipboard
@@ -575,7 +584,9 @@ nsresult TextEditor::HandlePasteAsQuotation(
   }
 
   // Get the Data from the clipboard
-  clipboard->GetData(trans, aClipboardType, AsVariant(GetDocument()));
+  auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
+  MOZ_ASSERT(browserChild);
+  clipboardProxy->GetDataWithBrowserCheck(trans, aClipboardType, browserChild);
 
   // Now we ask the transferable for the data
   // it still owns the data, we just have a pointer to it.

@@ -11,6 +11,7 @@
 #include "mozilla/contentanalysis/ContentAnalysisIPCTypes.h"
 #include "mozilla/contentanalysis/PContentAnalysisParent.h"
 #include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/BrowsingContext.h"
 #include "mozilla/layers/LayersTypes.h"
 
 namespace mozilla {
@@ -19,17 +20,13 @@ class ContentAnalysisParent final : public PContentAnalysisParent {
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(ContentAnalysisParent, final)
   ContentAnalysisParent() {}
 
-  mozilla::ipc::IPCResult RecvDoClipboardContentAnalysis(
-      const layers::LayersId& aLayersId, const IPCTransferableData& aData,
-      DoClipboardContentAnalysisResolver&& aResolver);
-
   mozilla::ipc::IPCResult RecvDoDragAndDropFilesContentAnalysis(
-      const layers::LayersId& aLayersId,
+      RefPtr<PBrowserParent> aParent,
       nsTArray<nsString>&& aFilePaths,
       DoDragAndDropFilesContentAnalysisResolver&& aResolver);
 
   mozilla::ipc::IPCResult RecvDoDragAndDropTextContentAnalysis(
-      const layers::LayersId& aLayersId,
+      RefPtr<PBrowserParent> aParent,
       nsString&& aText,
       DoDragAndDropTextContentAnalysisResolver&& aResolver);
  private:

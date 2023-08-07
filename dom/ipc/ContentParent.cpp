@@ -3532,7 +3532,7 @@ mozilla::ipc::IPCResult ContentParent::RecvGetClipboard(
 
   // Get data from clipboard
   nsCOMPtr<nsITransferable> trans = result.unwrap();
-  clipboard->GetData(trans, aWhichClipboard, AsVariant(mozilla::Nothing()));
+  clipboard->GetData(trans, aWhichClipboard);
 
   nsContentUtils::TransferableToIPCTransferableData(
       trans, aTransferableData, true /* aInSyncMessage */, this);
@@ -3611,12 +3611,17 @@ mozilla::ipc::IPCResult ContentParent::RecvGetClipboardAsync(
   }
 
   // Get data from clipboard
+#if 0
   BrowserParent* parent = nullptr;
   if (aBrowser) {
     parent = BrowserParent::GetFrom(aBrowser);
   }
+#endif
+  
   nsCOMPtr<nsITransferable> trans = result.unwrap();
-  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard, AsVariant(parent))
+
+  // DLP: passing parent???
+  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
       ->Then(GetMainThreadSerialEventTarget(), __func__,
              [trans, aResolver, self = RefPtr{this}](
                  GenericPromise::ResolveOrRejectValue&& aValue) {
