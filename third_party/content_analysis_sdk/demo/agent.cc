@@ -26,6 +26,7 @@ bool user_specific = false;
 unsigned long delay = 0;  // In seconds.
 unsigned long num_threads = 8u;
 std::string save_print_data_path = "";
+std::vector<std::pair<std::string, std::regex>> to_block;
 
 // Command line parameters.
 constexpr const char* kArgDelaySpecific = "--delay=";
@@ -35,6 +36,7 @@ constexpr const char* kArgThreads = "--threads=";
 constexpr const char* kArgUserSpecific = "--user";
 constexpr const char* kArgHelp = "--help";
 constexpr const char* kArgSavePrintRequestDataTo = "--save-print-request-data-to=";
+constexpr const char* kArgToBlock = "--toblock=";
 
 std::vector<std::pair<std::string, std::regex>>
 ParseToBlock(const std::string toBlock) {
@@ -75,6 +77,8 @@ bool ParseCommandLine(int argc, char* argv[]) {
     } else if (arg.find(kArgSavePrintRequestDataTo) == 0) {
       int arg_len = strlen(kArgSavePrintRequestDataTo);
       save_print_data_path = arg.substr(arg_len);
+    } else if (arg.find(kArgToBlock) == 0) {
+      to_block = ParseToBlock(arg.substr(strlen(kArgToBlock)));
     }
   }
 
@@ -104,8 +108,8 @@ int main(int argc, char* argv[]) {
   }
 
   auto handler = use_queue
-      ? std::make_unique<QueuingHandler>(num_threads, delay, save_print_data_path)
-      : std::make_unique<Handler>(delay, save_print_data_path);
+      ? std::make_unique<QueuingHandler>(num_threads, delay, save_print_data_path, to_block)
+      : std::make_unique<Handler>(delay, save_print_data_path, to_block);
 
   // Each agent uses a unique name to identify itself with Google Chrome.
   content_analysis::sdk::ResultCode rc;

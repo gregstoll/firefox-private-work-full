@@ -26,8 +26,12 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
  public:
   using Event = content_analysis::sdk::ContentAnalysisEvent;
 
-  Handler(unsigned long delay, const std::string& print_data_file_path) :
-      delay_(delay), print_data_file_path_(print_data_file_path) {
+  Handler(unsigned long delay, const std::string& print_data_file_path, const std::vector<std::pair<std::string, std::regex>>& to_block) :
+      delay_(delay), print_data_file_path_(print_data_file_path), to_block_(to_block) {
+    if (to_block_.empty()) {
+      // Add a default entry
+      to_block_.push_back(std::make_pair(".*block.*", std::regex(".*block.*")));
+    }
   }
 
   unsigned long delay() { return delay_; }
@@ -311,7 +315,7 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
     // Determines if the request should be blocked.  For this simple example
     // the content is blocked if the string "block" is found.  Otherwise the
     // content is allowed.
-    for (auto& r : toBlock) {
+    for (auto& r : to_block_) {
       if (std::regex_search(content, r.second)) {
         std::cout << "'" << content << "' matches regex '"
                   << r.first << "'" << std::endl;
@@ -324,19 +328,18 @@ class Handler : public content_analysis::sdk::AgentEventHandler {
     return false;
   }
 
-  // For the demo, block any strings that match these wildcards.
-  std::vector<std::pair<std::string, std::regex>> toBlock;
-
   unsigned long delay_;
   std::string print_data_file_path_;
+  // For the demo, block any strings that match these wildcards.
+  std::vector<std::pair<std::string, std::regex>> to_block_;
 };
 
 // An AgentEventHandler that dumps requests information to stdout and blocks
 // any requests that have the keyword "block" in their data
 class QueuingHandler : public Handler {
  public:
-  QueuingHandler(unsigned long threads, unsigned long delay, const std::string& print_data_file_path)
-      : Handler(delay, print_data_file_path)  {
+  QueuingHandler(unsigned long threads, unsigned long delay, const std::string& print_data_file_path, const std::vector<std::pair<std::string, std::regex>>& to_block)
+      : Handler(delay, print_data_file_path, to_block)  {
     StartBackgroundThreads(threads);
   }
 
