@@ -2265,6 +2265,8 @@ void ContentParent::ActorDestroy(ActorDestroyReason why) {
   MOZ_DIAGNOSTIC_ASSERT(mGroups.IsEmpty());
 
   mPendingLoadStates.Clear();
+
+  mContentAnalysisParent = nullptr;
 }
 
 bool ContentParent::TryToRecycleE10SOnly() {

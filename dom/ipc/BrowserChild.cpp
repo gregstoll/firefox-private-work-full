@@ -3800,11 +3800,6 @@ bool BrowserChild::CheckClipboardWithContentAnalysisSync(
             result = Some(false);
           });
 
-  if (!SendDoClipboardContentAnalysis(std::move(transferableCopy))) {
-    // send failed so block content
-    return false;
-  }
-
   SpinEventLoopUntil("CheckClipboardWithContentAnalysisSync"_ns,
     [&result]() -> bool {
       return result.isSome();
