@@ -90,8 +90,6 @@
 #include "mozilla/TelemetryIPC.h"
 #include "mozilla/Unused.h"
 #include "mozilla/WebBrowserPersistDocumentParent.h"
-#include "mozilla/contentanalysis/PContentAnalysisParent.h"
-#include "mozilla/contentanalysis/PContentAnalysisChild.h"
 #include "mozilla/devtools/HeapSnapshotTempFileHelperParent.h"
 #include "mozilla/dom/BlobURLProtocolHandler.h"
 #include "mozilla/dom/BrowserHost.h"
@@ -1713,17 +1711,6 @@ void ContentParent::Init() {
       GeckoMediaPluginServiceParent::GetSingleton());
   gmps->UpdateContentProcessGMPCapabilities(this);
 
-  {
-    Endpoint<contentanalysis::PContentAnalysisParent> parentEnd;
-    Endpoint<contentanalysis::PContentAnalysisChild> childEnd;
-    Unused << NS_WARN_IF(
-        NS_FAILED(contentanalysis::PContentAnalysis::CreateEndpoints(
-            base::GetCurrentProcId(), OtherPid(), &parentEnd, &childEnd)));
-    mContentAnalysisParent = new contentanalysis::ContentAnalysisParent();
-    Unused << NS_WARN_IF(!parentEnd.Bind(mContentAnalysisParent));
-    Unused << NS_WARN_IF(!SendCreateContentAnalysisChild(std::move(childEnd)));
-  }
-
   // Flush any pref updates that happened during launch and weren't
   // included in the blobs set up in BeginSubprocessLaunch.
   for (const Pref& pref : mQueuedPrefs) {
@@ -2265,8 +2252,6 @@ void ContentParent::ActorDestroy(ActorDestroyReason why) {
   MOZ_DIAGNOSTIC_ASSERT(mGroups.IsEmpty());
 
   mPendingLoadStates.Clear();
-
-  mContentAnalysisParent = nullptr;
 }
 
 bool ContentParent::TryToRecycleE10SOnly() {

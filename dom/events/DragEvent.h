@@ -30,6 +30,7 @@ class DragEvent : public MouseEvent {
   DragEvent* AsDragEvent() override { return this; }
 
   DataTransfer* GetDataTransfer();
+  nsIDragSession* GetDragSession() { return mDragSession; }
 
   void InitDragEvent(const nsAString& aType, bool aCanBubble, bool aCancelable,
                      nsGlobalWindowInner* aView, int32_t aDetail,
@@ -44,6 +45,8 @@ class DragEvent : public MouseEvent {
 
  protected:
   ~DragEvent() = default;
+
+  nsCOMPtr<nsIDragSession> mDragSession;
 };
 
 }  // namespace mozilla::dom

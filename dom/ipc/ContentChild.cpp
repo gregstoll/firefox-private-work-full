@@ -642,21 +642,6 @@ ContentChild::ContentChild()
                            */
 #endif
 
-class DestroyContentAnalysisRunnable final : public Runnable {
- public:
-  explicit DestroyContentAnalysisRunnable(contentanalysis::ContentAnalysisChild* aChild)
-      : Runnable("DestroyContentAnalysisRunnable"), mChild(aChild) {}
-
-  NS_IMETHOD Run() override {
-    mChild->Release();
-    return NS_OK;
-  }
-
- private:
-  ~DestroyContentAnalysisRunnable() override = default;
-  contentanalysis::ContentAnalysisChild* mChild;
-};
-
 ContentChild::~ContentChild() {
   profiler_remove_state_change_callback(reinterpret_cast<uintptr_t>(this));
 
@@ -1547,42 +1532,6 @@ mozilla::ipc::IPCResult ContentChild::RecvInitProcessHangMonitor(
   return IPC_OK();
 }
 
-mozilla::ipc::IPCResult ContentChild::RecvCreateContentAnalysisChild(
-    Endpoint<PContentAnalysisChild>&& aEndpoint) {
-  MOZ_ASSERT(!mContentAnalysisEventTarget);
-
-  nsresult rv = NS_CreateBackgroundTaskQueue(
-      "ContentAnalysis", mContentAnalysisEventTarget.StartAssignment());
-  if (NS_WARN_IF(NS_FAILED(rv))) {
-    return IPC_FAIL(this,
-                    "Failed to create task queue for ContentAnalysisChild");
-  }
-
-  mContentAnalysisEventTarget->Dispatch(NS_NewRunnableFunction(
-    __func__, [endp = std::move(aEndpoint)]() mutable {
-      RefPtr<contentanalysis::ContentAnalysisChild> child =
-          new contentanalysis::ContentAnalysisChild();
-
-      // Bind to the serial event target for this thread -- the background
-      // task thread.
-      if (!endp.Bind(child, GetCurrentSerialEventTarget())) {
-        MOZ_CRASH("Bind failed in CreateContentAnalysisRunnable::Run");
-      }
-
-      NS_DispatchToMainThread(NS_NewRunnableFunction(
-        __func__, [child = std::move(child)]() mutable {
-        auto* cc = ContentChild::GetSingleton();
-        if (!cc) {
-          NS_WARNING("Not adding ContentAnalysis to ContentChild.  "
-                     "ContentChild is already destroyed.");
-          return;
-        }
-        cc->mContentAnalysisChild = std::move(child);
-      }));
-    }));
-  return IPC_OK();
-}
-
 mozilla::ipc::IPCResult ContentChild::GetResultForRenderingInitFailure(
     base::ProcessId aOtherPid) {
   if (aOtherPid == base::GetCurrentProcId() || aOtherPid == OtherPid()) {
@@ -2223,18 +2172,6 @@ void ContentChild::ActorDestroy(ActorDestroyReason why) {
   // keep persistent state.
   ProcessChild::QuickExit();
 #else
-  // Destroy content analysis child on its thread
-  if (mContentAnalysisChild) {
-    MOZ_ASSERT(mContentAnalysisEventTarget);
-
-    contentanalysis::ContentAnalysisChild* contentAnalysisChild = nullptr;
-    mContentAnalysisChild.forget(&contentAnalysisChild);
-    RefPtr<DestroyContentAnalysisRunnable> runnable =
-        new DestroyContentAnalysisRunnable(contentAnalysisChild);
-    mContentAnalysisEventTarget->Dispatch(runnable.forget());
-    mContentAnalysisEventTarget = nullptr;
-  }
-
   // Destroy our JSProcessActors, and reject any pending queries.
   JSActorDidDestroy();
 

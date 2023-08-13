@@ -7,7 +7,6 @@
 #ifndef mozilla_dom_ContentParent_h
 #define mozilla_dom_ContentParent_h
 
-#include "mozilla/contentanalysis/ContentAnalysisParent.h"
 #include "mozilla/dom/PContentParent.h"
 #include "mozilla/dom/ipc/IdType.h"
 #include "mozilla/dom/MessageManagerCallback.h"
@@ -1627,7 +1626,6 @@ class ContentParent final : public PContentParent,
   // A preference serializer used to share preferences with the process.
   // Cleared once startup is complete.
   UniquePtr<mozilla::ipc::SharedPreferenceSerializer> mPrefSerializer;
-  RefPtr<contentanalysis::ContentAnalysisParent> mContentAnalysisParent;
 
   static uint32_t sMaxContentProcesses;
   static uint32_t sPageLoadEventCounter;

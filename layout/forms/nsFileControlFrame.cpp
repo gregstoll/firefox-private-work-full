@@ -8,7 +8,9 @@
 
 #include "nsGkAtoms.h"
 #include "nsCOMPtr.h"
+#include "mozilla/Components.h"
 #include "mozilla/dom/BlobImpl.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/NodeInfo.h"
 #include "mozilla/dom/Element.h"
@@ -23,6 +25,7 @@
 #include "mozilla/dom/MutationEventBinding.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/PresShell.h"
+#include "mozilla/SpinEventLoopUntil.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/TextEditor.h"
 #include "MiddleCroppingBlockFrame.h"
@@ -35,6 +38,9 @@
 #include "nsTextNode.h"
 #include "nsTextFrame.h"
 #include "gfxContext.h"
+
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;

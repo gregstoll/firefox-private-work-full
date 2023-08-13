@@ -32,6 +32,7 @@
 #include "mozilla/PresShellInlines.h"
 #include "mozilla/RangeUtils.h"
 #include "mozilla/ScopeExit.h"
+#include "mozilla/SpinEventLoopUntil.h"
 #include "mozilla/Sprintf.h"
 #include "mozilla/StaticAnalysisFunctions.h"
 #include "mozilla/StaticPrefs_apz.h"
@@ -8576,158 +8577,6 @@ PresShell::EventHandler::GetDocumentPrincipalToCompareWithBlacklist(
   return presContext->Document()->GetPrincipalForPrefBasedHacks();
 }
 
-class ContentAnalysisDropPromiseListener : public PromiseNativeHandler {
- public:
-   NS_DECL_ISUPPORTS
-
-   ContentAnalysisDropPromiseListener(nsCOMPtr<nsINode> aEventTarget, RefPtr<nsPresContext> aPresContext,
-                          WidgetEvent* aEvent, nsEventStatus* aEventStatus, nsPresShellEventCB* aEventCBPtr)
-      : mEventTarget(aEventTarget),
-        mPresContext(aPresContext),
-        mEvent(aEvent),
-        mEventStatus(aEventStatus),
-        mEventCBPtr(aEventCBPtr) {}
-
-   MOZ_CAN_RUN_SCRIPT virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
-     mozilla::ErrorResult& aRv) override {
-      // TODO synchronization
-      // TODO error checking
-      bool allowDrop = false;
-      if (aValue.isObject()) {
-        auto* obj = aValue.toObjectOrNull();
-        JS::Handle<JSObject*> handle = JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-        JS::Rooted<JS::Value> actionValue(aCx);
-        if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
-          if (actionValue.isNumber()) {
-            double actionNumber = actionValue.toNumber();
-            if (actionNumber !=
-                static_cast<double>(
-                    nsIContentAnalysisResponse::BLOCK)) {
-              allowDrop = true;
-            }
-          }
-        }
-      }
-      if (allowDrop) {
-        EventDispatcher::Dispatch(MOZ_KnownLive(ToSupports(mEventTarget)),
-            MOZ_KnownLive(mPresContext), mEvent, nullptr, mEventStatus, mEventCBPtr);
-      }
-   }
-   
-   virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
-                                 mozilla::ErrorResult& aRv) override {
-     // Nothing to do
-   }
-
- private:
-   ~ContentAnalysisDropPromiseListener() = default;
-  nsCOMPtr<nsINode> mEventTarget;
-  RefPtr<nsPresContext> mPresContext;
-  WidgetEvent* mEvent;
-  nsEventStatus* mEventStatus;
-  nsPresShellEventCB* mEventCBPtr;
-};
-
-NS_IMPL_ISUPPORTS0(ContentAnalysisDropPromiseListener)
-
-class SendDoDragAndDropFilesContentAnalysisRunnable final : public Runnable {
- public:
-  SendDoDragAndDropFilesContentAnalysisRunnable(
-      RefPtr<IPC::ContentAnalysisChild> aContentAnalysisChild,
-      CondVar& promiseDone,
-      contentanalysis::MaybeContentAnalysisResult& promiseResult,
-      RefPtr<BrowserChild> aBrowserChild, nsTArray<nsString>&& aFilePaths)
-      : Runnable("SendDoDragAndDropFilesContentAnalysisRunnable"),
-        mContentAnalysisChild(aContentAnalysisChild),
-        mPromiseDone(promiseDone),
-        mPromiseResult(promiseResult),
-        mBrowserChild(aBrowserChild),
-        mFilePaths(std::move(aFilePaths)){}
-
-  NS_IMETHOD Run() override {
-    CondVar& localPromiseDone = mPromiseDone;
-    contentanalysis::MaybeContentAnalysisResult& localPromiseResult =
-        mPromiseResult;
-    ContentChild::GetSingleton()
-        ->GetContentAnalysisChild()
-        ->SendDoDragAndDropFilesContentAnalysis(mBrowserChild, std::move(mFilePaths))
-        ->Then(
-            GetCurrentSerialEventTarget(), __func__,
-            /* resolve */
-            [&localPromiseDone, &localPromiseResult](
-                const contentanalysis::MaybeContentAnalysisResult& result) {
-              localPromiseResult = result;
-              localPromiseDone.Notify();
-            },
-            /* reject */
-            [&localPromiseDone,
-             &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
-              localPromiseResult.value = AsVariant(
-                  contentanalysis::NoContentAnalysisResult::ERROR_OTHER);
-              localPromiseDone.Notify();
-            });
-    return NS_OK;
-  }
-
- private:
-  ~SendDoDragAndDropFilesContentAnalysisRunnable() override = default;
-
-  RefPtr<IPC::ContentAnalysisChild> mContentAnalysisChild;
-  CondVar& mPromiseDone;
-  contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
-  RefPtr<BrowserChild> mBrowserChild;
-  nsTArray<nsString> mFilePaths;
-};
-
-// TODO - unify with the version in nsClipboardProxy.cpp?
-class SendDoDragAndDropTextContentAnalysisRunnable final : public Runnable {
- public:
-  SendDoDragAndDropTextContentAnalysisRunnable(
-      RefPtr<IPC::ContentAnalysisChild> aContentAnalysisChild,
-      CondVar& aPromiseDone,
-      contentanalysis::MaybeContentAnalysisResult& aPromiseResult,
-      RefPtr<BrowserChild> aBrowserChild, nsString&& aText)
-      : Runnable("SendDoDragAndDropTextContentAnalysisRunnable"),
-        mContentAnalysisChild(aContentAnalysisChild),
-        mPromiseDone(aPromiseDone),
-        mPromiseResult(aPromiseResult),
-        mBrowserChild(aBrowserChild),
-        mText(std::move(aText)) {}
-
-  NS_IMETHOD Run() override {
-    CondVar& localPromiseDone = mPromiseDone;
-    contentanalysis::MaybeContentAnalysisResult& localPromiseResult =
-        mPromiseResult;
-    mContentAnalysisChild
-        ->SendDoDragAndDropTextContentAnalysis(mBrowserChild, std::move(mText))
-        ->Then(
-            GetCurrentSerialEventTarget(), __func__,
-            /* resolve */
-            [&localPromiseDone, &localPromiseResult](
-                const contentanalysis::MaybeContentAnalysisResult& result) {
-              localPromiseResult = result;
-              localPromiseDone.Notify();
-            },
-            /* reject */
-            [&localPromiseDone,
-             &localPromiseResult](mozilla::ipc::ResponseRejectReason aReason) {
-              localPromiseResult.value = AsVariant(
-                  contentanalysis::NoContentAnalysisResult::ERROR_OTHER);
-              localPromiseDone.Notify();
-            });
-    return NS_OK;
-  }
-
- private:
-  ~SendDoDragAndDropTextContentAnalysisRunnable() override = default;
-
-  RefPtr<IPC::ContentAnalysisChild> mContentAnalysisChild;
-  CondVar& mPromiseDone;
-  contentanalysis::MaybeContentAnalysisResult& mPromiseResult;
-  RefPtr<BrowserChild> mBrowserChild;
-  nsString mText;
-};
-
 nsresult PresShell::EventHandler::DispatchEventToDOM(
     WidgetEvent* aEvent, nsEventStatus* aEventStatus,
     nsPresShellEventCB* aEventCB) {
@@ -8819,168 +8668,19 @@ nsresult PresShell::EventHandler::DispatchEventToDOM(
       }
     }
 
-    bool allowDispatchingEvent = true;
+    RefPtr<nsPresContext> presContext = GetPresContext();
     if (aEvent->mClass == eCompositionEventClass) {
-      RefPtr<nsPresContext> presContext = GetPresContext();
       RefPtr<BrowserParent> browserParent =
           IMEStateManager::GetActiveBrowserParent();
       IMEStateManager::DispatchCompositionEvent(
           eventTarget, presContext, browserParent, aEvent->AsCompositionEvent(),
           aEventStatus, eventCBPtr);
     } else {
-      RefPtr<nsPresContext> presContext = GetPresContext();
-      if (aEvent->mMessage == eDrop) {
-        nsresult rv;
-        nsCOMPtr<nsIContentAnalysis> contentAnalysis =
-            mozilla::components::nsIContentAnalysis::Service(&rv);
-        NS_ENSURE_SUCCESS(rv, rv);
-        bool contentAnalysisMightBeActive = false;
-        rv = contentAnalysis->GetMightBeActive(
-            &contentAnalysisMightBeActive);
-        NS_ENSURE_SUCCESS(rv, rv);
-        // TODO better null check
-        // TODO - why does this happen in the parent process too? sigh
-        if (contentAnalysisMightBeActive && presContext && XRE_IsContentProcess()) {
-          // TODO cleanup
-          if (presContext->GetDocShell()) {
-            //  We would like to use nsContentUtils::SetDataTransferInEvent()
-            //  here, but the event isn't set up right yet (for example,
-            //  mTarget is NULL). So, just get the active drag session and get
-            //  the data we need from there.
-            // rv = nsContentUtils::SetDataTransferInEvent(widgetDragEvent);
-            nsCOMPtr<nsIDragSession> dragSession =
-                nsContentUtils::GetDragSession();
-            DataTransfer* dataTransfer = dragSession->GetDataTransfer();
-            nsTArray<nsString> filePaths;
-            if (dataTransfer->HasFile()) {
-              // GetFiles doesn't work right because the event doesn't have a
-              // parent yet.
-              const DataTransferItemList* itemList = dataTransfer->Items();
-              for (uint32_t i = 0; i < itemList->Length(); ++i) {
-                bool found;
-                DataTransferItem* item = itemList->IndexedGetter(0, found);
-                if (item->Kind() == DataTransferItem::KIND_FILE) {
-                  nsString path;
-                  ErrorResult errorResult;
-                  // TODO - is this the right principal?
-                  // TODO - not using this errorResult right
-                  nsCOMPtr<nsIVariant> data = item->Data(
-                      nsContentUtils::GetSystemPrincipal(), errorResult);
-                  nsCOMPtr<nsISupports> supports;
-                  errorResult = data->GetAsISupports(getter_AddRefs(supports));
-                  MOZ_ASSERT(
-                      !errorResult.Failed() && supports,
-                      "File objects should be stored as nsISupports variants");
-                  if (nsCOMPtr<BlobImpl> blobImpl =
-                          do_QueryInterface(supports)) {
-                    MOZ_ASSERT(blobImpl->IsFile());
-                    blobImpl->GetMozFullPath(path, SystemCallerGuarantee(),
-                                             errorResult);
-                  } else if (nsCOMPtr<nsIFile> ifile =
-                                 do_QueryInterface(supports)) {
-                    ifile->GetPath(path);
-                  }
-                  // item->GetMozFullPathInternal(path, errorResult);
-                  //  TODO - is this error handling ok?
-                  nsresult localRv = errorResult.StealNSResult();
-                  if (NS_SUCCEEDED(localRv) && !path.IsEmpty()) {
-                    filePaths.EmplaceBack(std::move(path));
-                  }
-                }
-              }
-              if (!filePaths.IsEmpty()) {
-                BrowserChild* browserChild =
-                    BrowserChild::GetFrom(presContext->GetDocShell());
-                MOZ_ASSERT(browserChild);
-
-                Mutex promiseDoneMutex("PresShell::EventHandler");
-                // TODO there may be a more idiomatic way to do this than to use a CondVar
-                // with an already-locked Mutex
-                promiseDoneMutex.Lock();
-                CondVar promiseDoneCondVar(promiseDoneMutex, "PresShell::EventHandler");
-                contentanalysis::MaybeContentAnalysisResult promiseResult;
-                RefPtr<SendDoDragAndDropFilesContentAnalysisRunnable> runnable =
-                    new SendDoDragAndDropFilesContentAnalysisRunnable(
-                        ContentChild::GetSingleton()->GetContentAnalysisChild(),
-                        promiseDoneCondVar,
-                        promiseResult, browserChild, std::move(filePaths));
-
-                auto et = ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
-                MOZ_ASSERT(et);
-                et->Dispatch(runnable.forget());
-
-                promiseDoneCondVar.Wait();
-                // TODO - I am concerned here that there could be memory coherency issues
-                // here, where reading the value of promiseResult might get optimized away
-                // by the compiler or something. I was hoping to keep promiseResult in an
-                // Atomic<>, but the type is now too complicated for that (it's not
-                // trivially copyable, for one thing)
-                allowDispatchingEvent = promiseResult.ShouldAllowContent();
-                // This is needed to avoid assertions when the mutex gets destroyed.
-                promiseDoneMutex.Unlock();
-              }
-            }
-            // TODO - what if the clipboard has some allowed stuff and some disallowed stuff? Is
-            // it OK to deny them all?
-            if (allowDispatchingEvent) {
-              const DataTransferItemList* itemList = dataTransfer->Items();
-              // TODO - do these get grouped together? And should they get
-              // grouped with the files too?
-              for (uint32_t i = 0; i < itemList->Length() && allowDispatchingEvent; ++i) {
-                bool found;
-                DataTransferItem* item = itemList->IndexedGetter(0, found);
-                if (item->Kind() == DataTransferItem::KIND_STRING) {
-                  ErrorResult errorResult;
-                  // TODO - is this the right principal?
-                  // TODO - not using this errorResult right
-                  nsCOMPtr<nsIVariant> data = item->Data(
-                      nsContentUtils::GetSystemPrincipal(), errorResult);
-                  nsAutoString stringData;
-                  nsresult rv = data->GetAsAString(stringData);
-                  if (NS_SUCCEEDED(rv)) {
-                    BrowserChild* browserChild =
-                        BrowserChild::GetFrom(presContext->GetDocShell());
-                    MOZ_ASSERT(browserChild);
-
-                    Mutex promiseDoneMutex("PresShell::EventHandler");
-                    // TODO there may be a more idiomatic way to do this than to use a CondVar
-                    // with an already-locked Mutex
-                    promiseDoneMutex.Lock();
-                    CondVar promiseDoneCondVar(promiseDoneMutex, "PresShell::EventHandler");
-                    contentanalysis::MaybeContentAnalysisResult promiseResult;
-                    RefPtr<SendDoDragAndDropTextContentAnalysisRunnable> runnable =
-                        new SendDoDragAndDropTextContentAnalysisRunnable(
-                          ContentChild::GetSingleton()->GetContentAnalysisChild(),
-                          promiseDoneCondVar,
-                          promiseResult, browserChild, std::move(stringData));
-
-                    auto et = ContentChild::GetSingleton()->GetContentAnalysisEventTarget();
-                    MOZ_ASSERT(et);
-                    et->Dispatch(runnable.forget());
-
-                    promiseDoneCondVar.Wait();
-                    // TODO - I am concerned here that there could be memory coherency issues
-                    // here, where reading the value of promiseResult might get optimized away
-                    // by the compiler or something. I was hoping to keep promiseResult in an
-                    // Atomic<>, but the type is now too complicated for that (it's not
-                    // trivially copyable, for one thing)
-                    allowDispatchingEvent = promiseResult.ShouldAllowContent();
-                    // This is needed to avoid assertions when the mutex gets destroyed.
-                    promiseDoneMutex.Unlock();
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      if (allowDispatchingEvent) {
-        EventDispatcher::Dispatch(eventTarget, presContext, aEvent, nullptr,
-                                  aEventStatus, eventCBPtr);
-      }
+      EventDispatcher::Dispatch(eventTarget, presContext, aEvent, nullptr,
+                                aEventStatus, eventCBPtr);
     }
   }
+
   return rv;
 }
 
