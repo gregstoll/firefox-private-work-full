@@ -216,11 +216,9 @@ DataTransfer* DragEvent::GetDataTransfer() {
   WidgetDragEvent* dragEvent = mEvent->AsDragEvent();
   // for synthetic events, just use the supplied data transfer object even if
   // null
-  if (!mEventIsInternal && !mDragSession) {
-    MOZ_ASSERT(!dragEvent->mDataTransfer);
-    // TODO: consolidate the next two calls
+  if (!mEventIsInternal && !dragEvent->mDataTransfer) {
+    MOZ_ASSERT(!mDragSession);
     mDragSession = nsContentUtils::GetDragSession();
-    MOZ_ASSERT(mDragSession);
     nsresult rv = nsContentUtils::SetDataTransferInEvent(dragEvent);
     NS_ENSURE_SUCCESS(rv, nullptr);
 
