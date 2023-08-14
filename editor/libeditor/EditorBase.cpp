@@ -4591,8 +4591,11 @@ nsresult EditorBase::HandleDropEvent(DragEvent* aDropEvent) {
   }
 
   nsCOMPtr<nsIDragSession> dragSession = aDropEvent->GetDragSession();
-  if (NS_WARN_IF(!dragSession)) {
-    return NS_ERROR_FAILURE;
+  if (!dragSession) {
+    dragSession = nsContentUtils::GetDragSession();
+    if (NS_WARN_IF(!dragSession)) {
+      return NS_ERROR_FAILURE;
+    }
   }
 
   nsCOMPtr<nsINode> sourceNode = dataTransfer->GetMozSourceNode();
