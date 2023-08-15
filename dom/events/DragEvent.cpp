@@ -69,10 +69,25 @@ CheckContentAnalysisPermission(nsCOMPtr<DataTransfer> aDataTransfer, RefPtr<nsPr
   // TODO - do these get grouped together? And should they get
   // grouped with the files too?
   nsTArray<nsString> filePaths;
+  // These items are grouped together by Index() - every item with the same
+  // Index() is a different representation of the same underlying data.
+  // So we only need to check one of them.
+  Maybe<uint32_t> lastCheckedStringIndex = Nothing();
   for (uint32_t i = 0; i < itemList->Length(); ++i) {
     bool found;
     DataTransferItem* item = itemList->IndexedGetter(i, found);
+    MOZ_ASSERT(found);
     if (item->Kind() == DataTransferItem::KIND_STRING) {
+      // Skip mozilla-internal context around HTML
+      nsString type;
+      item->GetType(type);
+      if (type.EqualsASCII(kHTMLContext) || type.EqualsASCII(kHTMLInfo)) {
+        continue;
+      }
+      if (Some(item->Index()) == lastCheckedStringIndex) {
+        // Already checked a representation of this underlying data
+        continue;
+      }
       ErrorResult errorResult;
       // TODO - not using this errorResult right
       nsCOMPtr<nsIVariant> data = item->Data(principal, errorResult);
@@ -111,6 +126,7 @@ CheckContentAnalysisPermission(nsCOMPtr<DataTransfer> aDataTransfer, RefPtr<nsPr
         // Rejected by content analysis
         return false;
       }
+      lastCheckedStringIndex = Some(item->Index());
     } else if (item->Kind() == DataTransferItem::KIND_FILE) {
       nsString path;
       ErrorResult errorResult;
