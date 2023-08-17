@@ -82,6 +82,7 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
 
   static RefPtr<ContentAnalysisResponse> FromProtobuf(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
+  static RefPtr<ContentAnalysisResponse> FromAction(unsigned long aAction);
 
   void SetOwner(RefPtr<ContentAnalysis> aOwner);
 
@@ -89,6 +90,7 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
   virtual ~ContentAnalysisResponse() = default;
   explicit ContentAnalysisResponse(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
+  explicit ContentAnalysisResponse(unsigned long aAction);
 
   // See nsIContentAnalysisResponse for values
   unsigned long mAction;
