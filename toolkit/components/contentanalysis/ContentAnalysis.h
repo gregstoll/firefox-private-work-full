@@ -70,6 +70,7 @@ class ContentAnalysis : public nsIContentAnalysis {
   virtual ~ContentAnalysis();
   nsresult EnsureContentAnalysisClient();
   nsresult RunAnalyzeRequestTask(RefPtr<nsIContentAnalysisRequest> aRequest,
+                                 nsString&& aResourceName,
                                  RefPtr<mozilla::dom::Promise> aPromise);
 
   static StaticDataMutex<UniquePtr<content_analysis::sdk::Client>> sCaClient;

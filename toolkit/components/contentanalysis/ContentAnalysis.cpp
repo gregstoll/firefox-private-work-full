@@ -495,6 +495,7 @@ ContentAnalysis::GetMightBeActive(bool* aMightBeActive) {
 
 nsresult ContentAnalysis::RunAnalyzeRequestTask(
     RefPtr<nsIContentAnalysisRequest> aRequest,
+    nsString&& aResourceName,
     RefPtr<mozilla::dom::Promise> aPromise) {
   nsresult rv = NS_ERROR_FAILURE;
   auto promiseCopy = aPromise;
@@ -520,10 +521,13 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
   nsMainThreadPtrHandle<dom::Promise> promiseHolder(
       new nsMainThreadPtrHolder<dom::Promise>("content analysis promise",
                                               aPromise));
+  
+  nsString resourceName(std::move(aResourceName));
   rv = NS_DispatchBackgroundTask(
       NS_NewRunnableFunction(
           "RunAnalyzeRequestTask",
           [pbRequest = std::move(pbRequest),
+           resourceName = std::move(resourceName),
            promiseHolder = std::move(promiseHolder), owner] {
             nsresult rv = NS_ERROR_FAILURE;
             content_analysis::sdk::ContentAnalysisResponse pbResponse;
@@ -532,6 +536,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
               NS_DispatchToMainThread(NS_NewRunnableFunction(
                   "ResolveOnMainThread",
                   [rv, owner, promiseHolder = std::move(promiseHolder),
+                   resourceName = std::move(resourceName),
                    pbResponse = std::move(pbResponse)]() mutable {
                     if (SUCCEEDED(rv)) {
                       LOGD("Content analysis resolving response promise");
@@ -543,7 +548,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                         nsCOMPtr<nsIObserverService> obsServ =
                             mozilla::services::GetObserverService();
                         obsServ->NotifyObservers(response, "dlp-response",
-                                                 nullptr);
+                                                 resourceName.get());
                         promiseHolder.get()->MaybeResolve(std::move(response));
                       } else {
                         promiseHolder.get()->MaybeReject(NS_ERROR_FAILURE);
@@ -582,6 +587,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
 
 NS_IMETHODIMP
 ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
+                                       const nsAString& aResourceName,
                                        JSContext* aCx,
                                        mozilla::dom::Promise** aPromise) {
   NS_ENSURE_ARG(aRequest);
@@ -599,9 +605,10 @@ ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
 
   nsCOMPtr<nsIObserverService> obsServ =
     mozilla::services::GetObserverService();
-  obsServ->NotifyObservers(aRequest, "dlp-request-made", nullptr);
+  nsString resourceName(aResourceName);
+  obsServ->NotifyObservers(aRequest, "dlp-request-made", resourceName.get());
 
-  rv = RunAnalyzeRequestTask(aRequest, promise);
+  rv = RunAnalyzeRequestTask(aRequest, std::move(resourceName), promise);
   if (SUCCEEDED(rv)) {
     promise.forget(aPromise);
   }

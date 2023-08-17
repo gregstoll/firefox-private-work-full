@@ -4124,6 +4124,8 @@ class ContentAnalysisPromiseListener
           mResolver(contentanalysis::MaybeContentAnalysisResult(
               static_cast<int32_t>(actionNumber)));
           mContentAnalysisPromise->Release();
+          RefPtr<IPC::ContentAnalysisResponse> response =
+              IPC::ContentAnalysisResponse::FromAction(static_cast<unsigned long>(actionNumber));
           return;
         }
       }
@@ -4148,6 +4150,16 @@ class ContentAnalysisPromiseListener
 };
 
 NS_IMPL_ISUPPORTS0(ContentAnalysisPromiseListener)
+
+static nsresult GetFileDisplayName(const nsString& aFilePath, nsString& aFileDisplayName) {
+  nsresult rv;
+  nsCOMPtr<nsIFile> file =
+      do_CreateInstance("@mozilla.org/file/local;1", &rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = file->InitWithPath(aFilePath);
+  NS_ENSURE_SUCCESS(rv, rv);
+  return file->GetDisplayName(aFileDisplayName);
+}
 
 static nsresult GetFileDigest(const nsString& filePath, nsCString& digestString) {
   nsresult rv;
@@ -4290,8 +4302,11 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
         mozilla::contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
     return IPC_OK();
   }
+  nsString reason;
+  // TODO - string needs to be localized
+  reason.AssignLiteral("clipboard");
   rv = contentAnalysis->AnalyzeContentRequest(
-      contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+      contentAnalysisRequest, reason, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
@@ -4352,13 +4367,19 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropFilesContentAnalysis(
       nsGlobalWindowInner::Cast(
           GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
       "content analysis on clipboard copy");
+  nsString reason;
+  if (NS_FAILED(GetFileDisplayName(filePath, reason))) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
   // TODO - is BULK_DATA_ENTRY right?
   nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
       new mozilla::contentanalysis::ContentAnalysisRequest(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath), true,
           std::move(digestString), std::move(documentURIString)));
   rv = contentAnalysis->AnalyzeContentRequest(
-      contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+      contentAnalysisRequest, reason, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
@@ -4416,8 +4437,10 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropTextContentAnalysis(
       new mozilla::contentanalysis::ContentAnalysisRequest(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(aText), false,
           std::move(emptyDigest), std::move(documentURIString)));
+  nsString reason;
+  reason.AssignLiteral("dropped text");
   rv = contentAnalysis->AnalyzeContentRequest(
-      contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+      contentAnalysisRequest, reason, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);

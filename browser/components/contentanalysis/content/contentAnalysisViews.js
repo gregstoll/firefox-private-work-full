@@ -122,7 +122,7 @@ var ContentAnalysisViews = {
                   this.dlpBusyView = {
                     notification: this._showSlowCAMessage(
                       aSubj.analysisType,
-                      "clipboard"
+                      aData
                     ),
                   };
                 }, SLOW_TIMEOUT_MS),
@@ -142,7 +142,7 @@ var ContentAnalysisViews = {
               notification: this._showCAResult(
                 Ci.nsIContentAnalysisRequest
                   .FILE_DOWNLOADED /* TODO fix this type */,
-                "clipboard",
+                aData,
                 this.responseResultToAcknowledgementResult(responseResult)
               ),
             };
@@ -281,7 +281,7 @@ var ContentAnalysisViews = {
   _showSlowCAMessage(aOperation, aResourceName) {
     // TODO: Better message
     return this._showMessage(
-      "The Content Analysis Tool is taking a looooong time to respond..."
+      "The Content Analysis Tool is taking a looooong time to respond for resource " + aResourceName
     );
   },
 
@@ -298,20 +298,20 @@ var ContentAnalysisViews = {
         // We don't need to show anything
         break;
       case Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY:
-        message = "CA responded with REPORT_ONLY";
+        message = "CA responded with REPORT_ONLY for resource " + aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_FAST_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.WARN:
-        message = "CA responded with WARN";
+        message = "CA responded with WARN for resource " + aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.BLOCK:
-        message = "CA responded with BLOCK.  Transfer denied.";
+        message = "CA responded with BLOCK. Transfer denied for resource " + aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED:
         message =
-          "An error occurred in communicating with the CA.  Transfer denied.";
+          "An error occurred in communicating with the CA. Transfer denied for resource " + aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
     }
