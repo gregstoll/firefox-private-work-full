@@ -338,6 +338,9 @@ ContentAnalysisResponse::ContentAnalysisResponse(
   mRequestToken = aResponse.request_token().c_str();
 }
 
+ContentAnalysisResponse::ContentAnalysisResponse(unsigned long aAction)
+    : mAction(aAction) {}
+
 /* static */
 RefPtr<ContentAnalysisResponse> ContentAnalysisResponse::FromProtobuf(
     content_analysis::sdk::ContentAnalysisResponse&& aResponse) {
@@ -352,6 +355,15 @@ RefPtr<ContentAnalysisResponse> ContentAnalysisResponse::FromProtobuf(
   }
 
   return ret;
+}
+
+/* static */
+RefPtr<ContentAnalysisResponse> ContentAnalysisResponse::FromAction(
+    unsigned long aAction) {
+  if (aAction == nsIContentAnalysisResponse::ACTION_UNSPECIFIED) {
+    return nullptr;
+  }
+  return RefPtr<ContentAnalysisResponse>(new ContentAnalysisResponse(aAction));
 }
 
 static void LogResponse(

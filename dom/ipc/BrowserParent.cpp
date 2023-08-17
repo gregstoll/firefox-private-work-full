@@ -4113,6 +4113,8 @@ class ContentAnalysisPromiseListener
         mContentAnalysisPromise(aContentAnalysisPromise) {}
   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
+    nsCOMPtr<nsIObserverService> obsServ =
+        mozilla::services::GetObserverService();
     if (aValue.isObject()) {
       auto* obj = aValue.toObjectOrNull();
       JS::Handle<JSObject*> handle =
@@ -4124,6 +4126,9 @@ class ContentAnalysisPromiseListener
           mResolver(contentanalysis::MaybeContentAnalysisResult(
               static_cast<int32_t>(actionNumber)));
           mContentAnalysisPromise->Release();
+          RefPtr<IPC::ContentAnalysisResponse> response =
+              IPC::ContentAnalysisResponse::FromAction(static_cast<unsigned long>(actionNumber));
+          obsServ->NotifyObservers(response, "dlp-response", nullptr);
           return;
         }
       }
@@ -4131,6 +4136,7 @@ class ContentAnalysisPromiseListener
     mResolver(contentanalysis::MaybeContentAnalysisResult(
         contentanalysis::NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE));
     mContentAnalysisPromise->Release();
+    obsServ->NotifyObservers(nullptr, "dlp-response", nullptr);
   }
 
   virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
@@ -4293,6 +4299,10 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
   rv = contentAnalysis->AnalyzeContentRequest(
       contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
+    nsCOMPtr<nsIObserverService> obsServ =
+        mozilla::services::GetObserverService();
+    obsServ->NotifyObservers(contentAnalysisRequest, "dlp-request-made",
+                             nullptr);
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
     contentAnalysisPromise->AppendNativeHandler(listener);
