@@ -136,6 +136,16 @@ class ContentAnalysisPromiseListener : public PromiseNativeHandler {
 
 NS_IMPL_ISUPPORTS0(ContentAnalysisPromiseListener)
 
+static nsresult GetFileDisplayName(const nsString& aFilePath, nsString& aFileDisplayName) {
+  nsresult rv;
+  nsCOMPtr<nsIFile> file =
+      do_CreateInstance("@mozilla.org/file/local;1", &rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = file->InitWithPath(aFilePath);
+  NS_ENSURE_SUCCESS(rv, rv);
+  return file->GetDisplayName(aFileDisplayName);
+}
+
 /**
  * A runnable to dispatch from the main thread to the main thread to display
  * the file picker while letting the showAsync method return right away.
@@ -207,11 +217,14 @@ class nsBaseFilePicker::AsyncShowFilePicker : public mozilla::Runnable {
       rv = digest.End(digestResults);
       NS_ENSURE_SUCCESS(rv, rv);
       nsCString digestString = mozilla::ToHexString(digestResults);
+      nsString reason;
+      rv = GetFileDisplayName(filePath, reason);
+      NS_ENSURE_SUCCESS(rv, rv);
       nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
           new mozilla::contentanalysis::ContentAnalysisRequest(
               nsIContentAnalysisRequest::FILE_ATTACHED, std::move(filePath),
               true, std::move(digestString), std::move(uriString)));
-      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest,
+      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, reason,
                                                   aes.cx(), &promise);
       // TODO - better handling
       if (NS_SUCCEEDED(rv)) {

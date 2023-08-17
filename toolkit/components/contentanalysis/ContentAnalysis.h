@@ -70,6 +70,7 @@ class ContentAnalysis : public nsIContentAnalysis {
   virtual ~ContentAnalysis();
   nsresult EnsureContentAnalysisClient();
   nsresult RunAnalyzeRequestTask(RefPtr<nsIContentAnalysisRequest> aRequest,
+                                 nsString&& aResourceName,
                                  RefPtr<mozilla::dom::Promise> aPromise);
 
   static StaticDataMutex<UniquePtr<content_analysis::sdk::Client>> sCaClient;
@@ -82,6 +83,7 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
 
   static RefPtr<ContentAnalysisResponse> FromProtobuf(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
+  static RefPtr<ContentAnalysisResponse> FromAction(unsigned long aAction);
 
   void SetOwner(RefPtr<ContentAnalysis> aOwner);
 
@@ -89,6 +91,7 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
   virtual ~ContentAnalysisResponse() = default;
   explicit ContentAnalysisResponse(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
+  explicit ContentAnalysisResponse(unsigned long aAction);
 
   // See nsIContentAnalysisResponse for values
   unsigned long mAction;

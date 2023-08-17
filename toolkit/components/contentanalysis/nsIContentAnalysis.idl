@@ -154,5 +154,5 @@ interface nsIContentAnalysis : nsISupports
    * See @nsIContentAnalysisResponse.
    */
   [implicit_jscontext]
-  Promise AnalyzeContentRequest(in nsIContentAnalysisRequest aCar);
+  Promise AnalyzeContentRequest(in nsIContentAnalysisRequest aCar, in AString aResourceName);
 };
