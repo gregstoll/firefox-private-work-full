@@ -35,6 +35,8 @@ var ContentAnalysisViews = {
 
   _CA_SILENCE_NOTIFICATIONS: "browser.contentanalysis.silent_notifications",
 
+  haveCleanedUp: false,
+
   /**
    * Registers for various messages/events that will indicate the potential
    * need for communicating something to the user.
@@ -74,14 +76,17 @@ var ContentAnalysisViews = {
       observe: async (aSubj, aTopic, aData) => {
         switch (aTopic) {
           case 'quit-application-requested':
-            let allDownloads = await (await Downloads.getList(Downloads.ALL)).getAll();
-            for (var download of allDownloads) {
-              downloadsView._clearDownloadViews(download);
+            if (!ContentAnalysisViews.haveCleanedUp) {
+              ContentAnalysisViews.haveCleanedUp = true;
+              let allDownloads = await (await Downloads.getList(Downloads.ALL)).getAll();
+              for (var download of allDownloads) {
+                downloadsView._clearDownloadViews(download);
+              }
+              Services.obs.removeObserver(
+                downloadsView,
+                "quit-application-requested"
+              );
             }
-            Services.obs.removeObserver(
-              downloadsView,
-              "quit-application-requested"
-            );
         }
       },
 
@@ -150,7 +155,15 @@ var ContentAnalysisViews = {
     };
 
     Services.obs.addObserver(downloadsView, "quit-application-requested");
-    await (await Downloads.getList(Downloads.ALL)).addView(downloadsView);
+    let downloadList = await Downloads.getList(Downloads.ALL);
+    await downloadList.addView(downloadsView);
+    window.addEventListener("unload", async () => {
+      if (!ContentAnalysisViews.haveCleanedUp) {
+        ContentAnalysisViews.haveCleanedUp = true;
+        Services.obs.removeObserver(downloadsView, "quit-application-requested");
+        await downloadList.removeView(downloadsView);
+      }
+    });
   },
 
   _clearDownloadViews(aDownload) {
