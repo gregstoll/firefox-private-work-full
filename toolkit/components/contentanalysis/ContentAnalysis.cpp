@@ -11,8 +11,10 @@
 #include "mozilla/dom/Promise.h"
 #include "mozilla/Logging.h"
 #include "mozilla/ScopeExit.h"
+#include "mozilla/Services.h"
 #include "mozilla/StaticPrefs_browser.h"
 #include "nsIGlobalObject.h"
+#include "nsIObserverService.h"
 #include "xpcpublic.h"
 
 #include <algorithm>
@@ -536,6 +538,10 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                               std::move(pbResponse));
                       if (response) {
                         response->SetOwner(owner);
+                        nsCOMPtr<nsIObserverService> obsServ =
+                            mozilla::services::GetObserverService();
+                        obsServ->NotifyObservers(response, "dlp-response",
+                                                 nullptr);
                         promiseHolder.get()->MaybeResolve(std::move(response));
                       } else {
                         promiseHolder.get()->MaybeReject(NS_ERROR_FAILURE);
@@ -588,6 +594,10 @@ ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
   RefPtr<mozilla::dom::Promise> promise;
   rv = MakePromise(aCx, &promise);
   NS_ENSURE_SUCCESS(rv, rv);
+
+  nsCOMPtr<nsIObserverService> obsServ =
+    mozilla::services::GetObserverService();
+  obsServ->NotifyObservers(aRequest, "dlp-request-made", nullptr);
 
   rv = RunAnalyzeRequestTask(aRequest, promise);
   if (SUCCEEDED(rv)) {
