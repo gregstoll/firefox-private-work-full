@@ -4124,8 +4124,6 @@ class ContentAnalysisPromiseListener
           mResolver(contentanalysis::MaybeContentAnalysisResult(
               static_cast<int32_t>(actionNumber)));
           mContentAnalysisPromise->Release();
-          RefPtr<IPC::ContentAnalysisResponse> response =
-              IPC::ContentAnalysisResponse::FromAction(static_cast<unsigned long>(actionNumber));
           return;
         }
       }
