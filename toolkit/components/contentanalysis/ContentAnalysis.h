@@ -7,8 +7,11 @@
 #define mozilla_contentanalysis_h
 
 #include "mozilla/DataMutex.h"
+#include "mozilla/Mutex.h"
 #include "nsIContentAnalysis.h"
 #include "nsString.h"
+#include "nsProxyRelease.h"
+#include "nsTHashMap.h"
 
 #include <string>
 
@@ -53,6 +56,9 @@ class ContentAnalysisRequest : public nsIContentAnalysisRequest {
 
   // Email address of user.
   nsString mEmail;
+
+  // Unique identifier for this request
+  nsCString mRequestToken;
 };
 
 class ContentAnalysis : public nsIContentAnalysis {
@@ -62,9 +68,9 @@ class ContentAnalysis : public nsIContentAnalysis {
 
   nsresult RunAcknowledgeTask(
       nsIContentAnalysisAcknowledgement* aAcknowledgement,
-      const std::string& aRequestToken);
+      const nsCString& aRequestToken);
 
-  ContentAnalysis() = default;
+  ContentAnalysis();
 
  private:
   virtual ~ContentAnalysis();
@@ -74,6 +80,12 @@ class ContentAnalysis : public nsIContentAnalysis {
                                  RefPtr<mozilla::dom::Promise> aPromise);
 
   static StaticDataMutex<UniquePtr<content_analysis::sdk::Client>> sCaClient;
+  // Whether sCaClient has been created. This is convenient for checking
+  // this without having to acquire the sCaClient mutex.
+  static std::atomic<bool> sCaClientCreated;
+
+  DataMutex<nsTHashMap<nsCString, nsMainThreadPtrHandle<dom::Promise>>>
+      mPromiseMap;
 };
 
 class ContentAnalysisResponse : public nsIContentAnalysisResponse {
@@ -83,7 +95,7 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
 
   static RefPtr<ContentAnalysisResponse> FromProtobuf(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
-  static RefPtr<ContentAnalysisResponse> FromAction(unsigned long aAction);
+  static RefPtr<ContentAnalysisResponse> FromAction(unsigned long aAction, const nsACString& aRequestToken);
 
   void SetOwner(RefPtr<ContentAnalysis> aOwner);
 
@@ -91,12 +103,13 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
   virtual ~ContentAnalysisResponse() = default;
   explicit ContentAnalysisResponse(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
-  explicit ContentAnalysisResponse(unsigned long aAction);
+  ContentAnalysisResponse(unsigned long aAction, const nsACString& aRequestToken);
 
   // See nsIContentAnalysisResponse for values
   unsigned long mAction;
 
-  std::string mRequestToken;
+  // Identifier for the corresponding nsIContentAnalysisRequest
+  nsCString mRequestToken;
 
   // ContentAnalysis (or, more precisely, it's Client object) must outlive
   // the transaction.

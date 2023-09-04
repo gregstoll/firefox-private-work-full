@@ -22,6 +22,13 @@ const { BrowserWindowTracker } = ChromeUtils.import(
   "resource:///modules/BrowserWindowTracker.jsm"
 );
 
+XPCOMUtils.defineLazyServiceGetter(
+  this,
+  "gContentAnalysis",
+  "@mozilla.org/contentanalysis;1",
+  Ci.nsIContentAnalysis
+);
+
 var ContentAnalysisViews = {
   _SHOW_NOTIFICATIONS: true,
 
@@ -36,6 +43,10 @@ var ContentAnalysisViews = {
   _CA_SILENCE_NOTIFICATIONS: "browser.contentanalysis.silent_notifications",
 
   haveCleanedUp: false,
+
+  dlpBusyViews: new WeakMap(),
+
+  requestTokenToBrowser: new Map(),
 
   /**
    * Registers for various messages/events that will indicate the potential
@@ -110,33 +121,50 @@ var ContentAnalysisViews = {
               Services.obs.removeObserver(downloadsView, "dlp-response");
             }
             break;
-          case "dlp-request-made":
-            // TODO - check correct window
-            const SLOW_TIMEOUT_MS = 3000; // 3 sec
+          case "dlp-request-made": {
+            const operation = aSubj?.QueryInterface(Ci.nsIContentAnalysisRequest)?.analysisType ??
+              Ci.nsIContentAnalysisRequest.ANALYSIS_CONNECTOR_UNSPECIFIED;
+            // For operations that block browser interaction, show the "slow content analysis"
+            // dialog faster
+            let slowTimeoutMs = this._shouldShowBlockingNotification(operation) ? 250 : 3000;
+            let browser = gBrowser.selectedBrowser;
 
             // Start timer that, when it expires,
             // presents a "slow CA check" message.
-            if (!this.dlpBusyView) {
-              this.dlpBusyView = {
+            if (!this.dlpBusyViews.has(browser)) {
+              this.requestTokenToBrowser.set(aSubj.requestToken, browser);
+              let browsingContext = browser.browsingContext;
+              this.dlpBusyViews.set(browser, {
                 timer: setTimeout(() => {
-                  this.dlpBusyView = {
+                  this.dlpBusyViews.set(browser, {
                     notification: this._showSlowCAMessage(
-                      aSubj.analysisType,
-                      aData
+                      operation,
+                      aSubj,
+                      aData,
+                      browsingContext
                     ),
-                  };
-                }, SLOW_TIMEOUT_MS),
-              };
+                  });
+                }, slowTimeoutMs),
+              });
             }
+          }
             break;
           case "dlp-response":
-            // TODO - check correct window
+            let request = aSubj?.QueryInterface(Ci.nsIContentAnalysisResponse);
             // Cancels timer or slow message UI,
             // if present, and possibly presents the CA verdict.
-            this._disconnectFromView(this.dlpBusyView);
-            this.dlpBusyView = undefined;
+            if (!request || !this.requestTokenToBrowser.has(request.requestToken)) {
+              // Maybe this was cancelled or something.
+              return;
+            }
+            let browser = this.requestTokenToBrowser.get(request.requestToken);
+            this.requestTokenToBrowser.delete(request.requestToken);
+            if (this.dlpBusyViews.has(browser)) {
+              this._disconnectFromView(this.dlpBusyViews.get(browser));
+              this.dlpBusyViews.delete(browser);
+            }
             const responseResult =
-              aSubj?.QueryInterface(Ci.nsIContentAnalysisResponse)?.action ??
+              request?.action ??
               Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED;
             this.resultView = {
               notification: this._showCAResult(
@@ -163,12 +191,15 @@ var ContentAnalysisViews = {
         // presents a "slow CA check" message.
         if (aDownload.contentAnalysis.state === aDownload.contentAnalysis.RUNNING &&
             !aDownload.contentAnalysis.hasOwnProperty('busyView')) {
+          let browsingContext = gBrowser.selectedBrowser.browsingContext;
           aDownload.contentAnalysis.busyView = {
             timer: setTimeout(() => {
               aDownload.contentAnalysis.busyView = {
                 notification: this._showSlowCAMessage(
                   Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
-                  aDownload.source.url
+                  null,
+                  aDownload.source.url,
+                  browsingContext
                 ),
               };
             }, this._SLOW_DLP_NOTIFICATION_TIMEOUT_MS),
@@ -247,7 +278,18 @@ var ContentAnalysisViews = {
     if ('timer' in caView) {
       clearTimeout(caView.timer);
     } else if ('notification' in caView) {
-      caView.notification.close();
+      if ('close' in caView.notification) {
+        // native notification
+        caView.notification.close();
+      } else if ('dialogBrowsingContext' in caView.notification) {
+        // in-browser notification
+        let browser = caView.notification.dialogBrowsingContext.top.embedderElement;
+        let win = browser.ownerGlobal;
+        let dialogBox = win.gBrowser.getTabDialogBox(browser);
+        dialogBox.abortAllDialogs();
+      } else {
+        console.error("Unexpected content analysis notification - can't close it!");
+      }
     }
   },
 
@@ -274,15 +316,43 @@ var ContentAnalysisViews = {
     return null;
   },
 
+  _shouldShowBlockingNotification(aOperation) {
+    return !(aOperation == Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED ||
+             aOperation == Ci.nsIContentAnalysisRequest.PRINT);
+  },
+
   /**
    * Show a messagge to the user to indicate that a CA request is taking
    * a long time.
    */
-  _showSlowCAMessage(aOperation, aResourceName) {
+  _showSlowCAMessage(aOperation, aRequest, aResourceName, aBrowsingContext) {
     // TODO: Better message
-    return this._showMessage(
-      "The Content Analysis Tool is taking a looooong time to respond for resource " + aResourceName
-    );
+    if (!this._shouldShowBlockingNotification(aOperation)) {
+      return this._showMessage(
+        "The Content Analysis Tool is taking a looooong time to respond for resource " + aResourceName
+      );
+    }
+
+    if (!aRequest) {
+      console.error("Showing in-browser Content Analysis notification but no request was passed");
+    }
+
+    let promise = Services.prompt.asyncConfirmEx(aBrowsingContext, Ci.nsIPromptService.MODAL_TYPE_TAB,
+      "Content Analysis in progress", "Content Analysis is analyzing: " + aResourceName,
+      Ci.nsIPromptService.BUTTON_POS_0 * Ci.nsIPromptService.BUTTON_TITLE_CANCEL + Ci.nsIPromptService.SHOW_SPINNER, null, null, null,
+      null, false);
+    let browser = gBrowser.selectedBrowser;
+    promise.then(() => {
+      gContentAnalysis.CancelContentAnalysisRequest(aRequest.requestToken);
+      if (this.dlpBusyViews.has(browser)) {
+        this._disconnectFromView(this.dlpBusyViews.get(browser));
+        this.dlpBusyViews.delete(browser);
+        this.requestTokenToBrowser.delete(aRequest.requestToken);
+      }
+    }).catch(() => {
+      // needed to avoid crashing the tab when we programmatically close the dialog
+    });
+    return {requestToken: aRequest.requestToken, dialogBrowsingContext: aBrowsingContext};
   },
 
   /**
