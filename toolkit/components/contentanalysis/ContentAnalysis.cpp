@@ -47,11 +47,13 @@ nsresult MakePromise(JSContext* aCx, RefPtr<mozilla::dom::Promise>* aPromise) {
   return NS_OK;
 }
 
-std::string GenerateRequestToken() {
+nsCString GenerateRequestToken() {
+  static mozilla::Mutex requestTokenMutex{"ContentAnalysis.cpp:GenerateRequestToken"};
   static uint32_t count = 0;
+  mozilla::MutexAutoLock lock(requestTokenMutex);
   std::stringstream stm;
   stm << std::hex << base::GetCurrentProcId() << "-" << count++;
-  return stm.str();
+  return nsCString(stm.str());
 }
 
 }  // anonymous namespace
@@ -105,13 +107,23 @@ ContentAnalysisRequest::GetResources(
   return NS_OK;
 }
 
+NS_IMETHODIMP
+ContentAnalysisRequest::GetRequestToken(nsACString& aRequestToken) {
+  aRequestToken = mRequestToken;
+  return NS_OK;
+}
+
 /* static */
+std::atomic<bool> ContentAnalysis::sCaClientCreated(false);
 StaticDataMutex<UniquePtr<content_analysis::sdk::Client>>
     ContentAnalysis::sCaClient("ContentAnalysisClient");
 
 ContentAnalysis* gInstance;
 
 nsresult ContentAnalysis::EnsureContentAnalysisClient() {
+  if (sCaClientCreated) {
+    return NS_OK;
+  }
   auto caClientRef = sCaClient.Lock();
   auto& caClient = caClientRef.ref();
   if (caClient) {
@@ -126,6 +138,7 @@ nsresult ContentAnalysis::EnsureContentAnalysisClient() {
           pipePathName.Data(), Preferences::GetBool(kIsPerUserPref)
         }).release());
   LOGD("Content analysis is %s", caClient ? "connected" : "not available");
+  sCaClientCreated.store(!!caClient);
   return caClient ? NS_OK : NS_ERROR_NOT_AVAILABLE;
 }
 
@@ -140,6 +153,7 @@ ContentAnalysisRequest::ContentAnalysisRequest(unsigned long aAnalysisType,
   } else {
     mTextContent = aString;
   }
+  mRequestToken = GenerateRequestToken();
 }
 
 static nsresult ConvertToProtobuf(
@@ -172,8 +186,9 @@ static nsresult ConvertToProtobuf(
       static_cast<content_analysis::sdk::AnalysisConnector>(analysisType);
   aOut->set_analysis_connector(connector);
 
-  std::string requestToken = GenerateRequestToken();
-  aOut->set_request_token(requestToken);
+  nsCString requestToken;
+  rv = aIn->GetRequestToken(requestToken);
+  aOut->set_request_token(std::string(requestToken.get(), requestToken.Length()));
 
   const std::string tag = "dlp";  // TODO:
   *aOut->add_tags() = tag;
@@ -339,8 +354,8 @@ ContentAnalysisResponse::ContentAnalysisResponse(
   mRequestToken = aResponse.request_token().c_str();
 }
 
-ContentAnalysisResponse::ContentAnalysisResponse(unsigned long aAction)
-    : mAction(aAction) {}
+ContentAnalysisResponse::ContentAnalysisResponse(unsigned long aAction, const nsACString& aRequestToken)
+    : mAction(aAction), mRequestToken(aRequestToken) {}
 
 /* static */
 RefPtr<ContentAnalysisResponse> ContentAnalysisResponse::FromProtobuf(
@@ -360,11 +375,17 @@ RefPtr<ContentAnalysisResponse> ContentAnalysisResponse::FromProtobuf(
 
 /* static */
 RefPtr<ContentAnalysisResponse> ContentAnalysisResponse::FromAction(
-    unsigned long aAction) {
+    unsigned long aAction, const nsACString& aRequestToken) {
   if (aAction == nsIContentAnalysisResponse::ACTION_UNSPECIFIED) {
     return nullptr;
   }
-  return RefPtr<ContentAnalysisResponse>(new ContentAnalysisResponse(aAction));
+  return RefPtr<ContentAnalysisResponse>(new ContentAnalysisResponse(aAction, aRequestToken));
+}
+
+NS_IMETHODIMP
+ContentAnalysisResponse::GetRequestToken(nsACString& aRequestToken) {
+  aRequestToken = mRequestToken;
+  return NS_OK;
 }
 
 static void LogResponse(
@@ -404,9 +425,10 @@ static void LogResponse(
 }
 
 static nsresult ConvertToProtobuf(
-    nsIContentAnalysisAcknowledgement* aIn, const std::string& aRequestToken,
+    nsIContentAnalysisAcknowledgement* aIn, const nsCString& aRequestToken,
     content_analysis::sdk::ContentAnalysisAcknowledgement* aOut) {
-  aOut->set_request_token(aRequestToken);
+  aOut->set_request_token(
+      std::string(aRequestToken.get(), aRequestToken.Length()));
 
   uint32_t result;
   nsresult rv = aIn->GetResult(&result);
@@ -465,6 +487,9 @@ NS_IMPL_ISUPPORTS(ContentAnalysisRequest, nsIContentAnalysisRequest);
 NS_IMPL_ISUPPORTS(ContentAnalysisResponse, nsIContentAnalysisResponse);
 NS_IMPL_ISUPPORTS(ContentAnalysis, nsIContentAnalysis);
 
+ContentAnalysis::ContentAnalysis() : mPromiseMap("ContentAnalysisRequest::mPendingPromiseMapMutex") {
+}
+
 ContentAnalysis::~ContentAnalysis() {
   auto caClientRef = sCaClient.Lock();
   auto& caClient = caClientRef.ref();
@@ -514,35 +539,63 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
   rv = ConvertToProtobuf(aRequest, &pbRequest);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  LOGD("Issuing ContentAnalysisRequest");
-  LogRequest(&pbRequest);
-
   // The content analysis connection is synchronous so run in the background.
   nsMainThreadPtrHandle<dom::Promise> promiseHolder(
       new nsMainThreadPtrHolder<dom::Promise>("content analysis promise",
                                               aPromise));
-  
+  nsCString requestToken;
+  {
+    auto promiseMapRef = mPromiseMap.Lock();
+    auto& promiseMap = promiseMapRef.ref();
+ 
+    nsMainThreadPtrHandle<dom::Promise> promiseHolderCopy(
+        new nsMainThreadPtrHolder<dom::Promise>("content analysis promise",
+                                                aPromise));
+    rv = aRequest->GetRequestToken(requestToken);
+    NS_ENSURE_SUCCESS(rv, rv);
+    promiseMap.InsertOrUpdate(requestToken, std::move(promiseHolderCopy));
+  }
+
+  LOGD("Issuing ContentAnalysisRequest for token %s", requestToken.get());
+  LogRequest(&pbRequest);
+
+
   nsString resourceName(std::move(aResourceName));
   rv = NS_DispatchBackgroundTask(
       NS_NewRunnableFunction(
           "RunAnalyzeRequestTask",
           [pbRequest = std::move(pbRequest),
            resourceName = std::move(resourceName),
-           promiseHolder = std::move(promiseHolder), owner] {
+           promiseHolder = std::move(promiseHolder),
+           requestToken = std::move(requestToken), this, owner] {
             nsresult rv = NS_ERROR_FAILURE;
             content_analysis::sdk::ContentAnalysisResponse pbResponse;
+            nsCString requestTokenCopy(requestToken);
 
             auto resolveOnMainThread = MakeScopeExit([&] {
               NS_DispatchToMainThread(NS_NewRunnableFunction(
                   "ResolveOnMainThread",
-                  [rv, owner, promiseHolder = std::move(promiseHolder),
+                  [this, rv, owner, promiseHolder = std::move(promiseHolder),
                    resourceName = std::move(resourceName),
-                   pbResponse = std::move(pbResponse)]() mutable {
+                   pbResponse = std::move(pbResponse),
+                   requestToken = std::move(requestToken)]() mutable {
+                    mozilla::Maybe<nsMainThreadPtrHandle<dom::Promise>> entry;
+                    {
+                      auto promiseMapRef = mPromiseMap.Lock();
+                      auto& promiseMap = promiseMapRef.ref();
+                      entry = promiseMap.MaybeGet(requestToken);
+                      // Regardless, remove the entry from the map
+                      promiseMap.Remove(requestToken);
+                    }
+                    if (entry.isNothing()) {
+                      // request has already been cancelled, so there's nothing to do
+                      LOGD("Content analysis got response but ignoring because it was already cancelled for token %s", requestToken.get());
+                      return;
+                    }
                     if (SUCCEEDED(rv)) {
-                      LOGD("Content analysis resolving response promise");
+                      LOGD("Content analysis resolving response promise for token %s", requestToken.get());
                       RefPtr<ContentAnalysisResponse> response =
-                          ContentAnalysisResponse::FromProtobuf(
-                              std::move(pbResponse));
+                          ContentAnalysisResponse::FromProtobuf(std::move(pbResponse));
                       if (response) {
                         response->SetOwner(owner);
                         nsCOMPtr<nsIObserverService> obsServ =
@@ -565,6 +618,20 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
               LOGD("RunAnalyzeRequestTask failed to get client");
               rv = NS_ERROR_NOT_AVAILABLE;
               return;
+            }
+            {
+              auto promiseMapRef = mPromiseMap.Lock();
+              auto& promiseMap = promiseMapRef.ref();
+              if (!promiseMap.Contains(requestTokenCopy)) {
+                LOGD(
+                    "RunAnalyzeRequestTask token %s has already been "
+                    "cancelled - not issuing request",
+                    requestTokenCopy.get());
+                rv = NS_OK;
+                // No need to do this since the promise has already been resolved
+                resolveOnMainThread.release();
+                return;
+              }
             }
 
             // Run request, then dispatch back to main thread to resolve
@@ -616,6 +683,26 @@ ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
 }
 
 NS_IMETHODIMP
+ContentAnalysis::CancelContentAnalysisRequest(const nsACString& aRequestToken) {
+  nsCString requestToken(aRequestToken);
+  NS_DispatchToMainThread(NS_NewRunnableFunction(
+    "CancelContentAnalysisRequest",
+    [this, requestToken]() {
+      auto promiseMapRef = mPromiseMap.Lock();
+      auto& promiseMap = promiseMapRef.ref();
+      mozilla::Maybe<nsMainThreadPtrHandle<dom::Promise>> entry = promiseMap.MaybeGet(requestToken);
+      LOGD("Content analysis cancelling request %s", requestToken.get());
+      if (entry.isSome()) {
+        entry->get()->MaybeResolve(ContentAnalysisResponse::FromAction(nsIContentAnalysisResponse::CANCELED, requestToken));
+        promiseMap.Remove(requestToken);
+      } else {
+        LOGD("Content analysis request not found when trying to cancel %s", requestToken.get());
+      }
+    }));
+  return NS_OK;
+}
+
+NS_IMETHODIMP
 ContentAnalysisResponse::Acknowledge(
     nsIContentAnalysisAcknowledgement* aAcknowledgement) {
   MOZ_ASSERT(mOwner);
@@ -624,7 +711,7 @@ ContentAnalysisResponse::Acknowledge(
 
 nsresult ContentAnalysis::RunAcknowledgeTask(
     nsIContentAnalysisAcknowledgement* aAcknowledgement,
-    const std::string& aRequestToken) {
+    const nsCString& aRequestToken) {
   bool isActive;
   nsresult rv = GetIsActive(&isActive);
   NS_ENSURE_SUCCESS(rv, rv);

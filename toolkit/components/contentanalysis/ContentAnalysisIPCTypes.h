@@ -17,6 +17,7 @@ namespace contentanalysis {
 enum class NoContentAnalysisResult : uint8_t {
   AGENT_NOT_PRESENT,
   NO_PARENT_BROWSER,
+  CANCELED,
   ERROR_INVALID_JSON_RESPONSE,
   ERROR_OTHER,
   LAST_VALUE = ERROR_OTHER
