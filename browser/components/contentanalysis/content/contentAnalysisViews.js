@@ -132,6 +132,7 @@ var ContentAnalysisViews = {
             // Start timer that, when it expires,
             // presents a "slow CA check" message.
             if (!this.dlpBusyViews.has(browser)) {
+              this.requestTokenToBrowser.set(aSubj.requestToken, browser);
               let browsingContext = browser.browsingContext;
               this.dlpBusyViews.set(browser, {
                 timer: setTimeout(() => {
@@ -148,7 +149,7 @@ var ContentAnalysisViews = {
             }
           }
             break;
-          case "dlp-response": 
+          case "dlp-response":
             let request = aSubj?.QueryInterface(Ci.nsIContentAnalysisResponse);
             // Cancels timer or slow message UI,
             // if present, and possibly presents the CA verdict.
@@ -341,7 +342,6 @@ var ContentAnalysisViews = {
       Ci.nsIPromptService.BUTTON_POS_0 * Ci.nsIPromptService.BUTTON_TITLE_CANCEL + Ci.nsIPromptService.SHOW_SPINNER, null, null, null,
       null, false);
     let browser = gBrowser.selectedBrowser;
-    this.requestTokenToBrowser.set(aRequest.requestToken, browser);
     promise.then(() => {
       gContentAnalysis.CancelContentAnalysisRequest(aRequest.requestToken);
       if (this.dlpBusyViews.has(browser)) {
