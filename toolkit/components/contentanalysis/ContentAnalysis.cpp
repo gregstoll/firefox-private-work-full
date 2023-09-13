@@ -28,15 +28,9 @@
 
 namespace {
 
-#define DLP_PER_USER 1
-
-#ifdef DLP_PER_USER
-static const char* kPipeName = "path_user";
-static bool kIsPerUser = true;
-#else
-static const char* kPipeName = "path_system";
-static bool kIsPerUser = false;
-#endif
+const char *kIsDLPEnabledPref = "browser.contentanalysis.enabled";
+const char *kIsPerUserPref = "browser.contentanalysis.is_per_user";
+const char *kPipePathNamePref = "browser.contentanalysis.pipe_path_name";
 
 static constexpr uint32_t kAnalysisTimeoutSecs = 30;  // 30 sec
 
@@ -124,8 +118,13 @@ nsresult ContentAnalysis::EnsureContentAnalysisClient() {
     return NS_OK;
   }
 
+  nsAutoCString pipePathName;
+  Preferences::GetCString(kPipePathNamePref, pipePathName);
   caClient.reset(
-      content_analysis::sdk::Client::Create({kPipeName, kIsPerUser}).release());
+      content_analysis::sdk::Client::Create(
+        {
+          pipePathName.Data(), Preferences::GetBool(kIsPerUserPref)
+        }).release());
   LOGD("Content analysis is %s", caClient ? "connected" : "not available");
   return caClient ? NS_OK : NS_ERROR_NOT_AVAILABLE;
 }
@@ -475,7 +474,7 @@ ContentAnalysis::~ContentAnalysis() {
 NS_IMETHODIMP
 ContentAnalysis::GetIsActive(bool* aIsActive) {
   *aIsActive = false;
-  if (!StaticPrefs::browser_contentanalysis_enabled()) {
+  if (!Preferences::GetBool(kIsDLPEnabledPref)) {
     return NS_OK;
   }
 
@@ -487,7 +486,10 @@ ContentAnalysis::GetIsActive(bool* aIsActive) {
 
 NS_IMETHODIMP
 ContentAnalysis::GetMightBeActive(bool* aMightBeActive) {
-  *aMightBeActive = StaticPrefs::browser_contentanalysis_enabled();
+  // A DLP connection is not permitted to be added/removed while the
+  // browser is running, so we can cache this.
+  static bool sIsEnabled = Preferences::GetBool("browser.contentanalysis.enabled");
+  *aMightBeActive = sIsEnabled;
   return NS_OK;
 }
 
