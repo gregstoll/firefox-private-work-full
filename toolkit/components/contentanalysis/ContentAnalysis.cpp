@@ -26,6 +26,15 @@
 #  include <security.h>
 #endif  // XP_WIN
 
+namespace mozilla {
+namespace contentanalysis {
+
+LazyLogModule gContentAnalysisLog("contentanalysis");
+#define LOGD(...) MOZ_LOG(mozilla::contentanalysis::gContentAnalysisLog, mozilla::LogLevel::Debug, (__VA_ARGS__))
+
+}  // namespace contentanalysis
+}
+
 namespace {
 
 const char *kIsDLPEnabledPref = "browser.contentanalysis.enabled";
@@ -56,13 +65,31 @@ nsCString GenerateRequestToken() {
   return nsCString(stm.str());
 }
 
+uint32_t ResponseResultToAcknowledgementResult(uint32_t responseResult) {
+  switch (responseResult) {
+    case nsIContentAnalysisResponse::REPORT_ONLY:
+      return nsIContentAnalysisAcknowledgement::REPORT_ONLY;
+    case nsIContentAnalysisResponse::WARN:
+      return nsIContentAnalysisAcknowledgement::WARN;
+    case nsIContentAnalysisResponse::BLOCK:
+      return nsIContentAnalysisAcknowledgement::BLOCK;
+    case nsIContentAnalysisResponse::ALLOW:
+      return nsIContentAnalysisAcknowledgement::ALLOW;
+    case nsIContentAnalysisResponse::ACTION_UNSPECIFIED:
+      return nsIContentAnalysisAcknowledgement::ACTION_UNSPECIFIED;
+    default:
+      MOZ_ASSERT_UNREACHABLE(
+          "ResponseResultToAcknowledgementResult got unexpected "
+          "responseResult");
+      LOGD("ResponseResultToAcknowledgementResult got unexpected responseResult %d", responseResult);
+      return nsIContentAnalysisAcknowledgement::ACTION_UNSPECIFIED;
+  }
+}
+
 }  // anonymous namespace
 
 namespace mozilla {
 namespace contentanalysis {
-
-LazyLogModule gContentAnalysisLog("contentanalysis");
-#define LOGD(...) MOZ_LOG(gContentAnalysisLog, LogLevel::Debug, (__VA_ARGS__))
 
 NS_IMETHODIMP
 ContentAnalysisRequest::GetAnalysisType(uint32_t* aAnalysisType) {
@@ -483,8 +510,26 @@ void ContentAnalysisResponse::SetOwner(RefPtr<ContentAnalysis> aOwner) {
   mOwner = aOwner;
 }
 
+ContentAnalysisAcknowledgement::ContentAnalysisAcknowledgement(unsigned long aResult, unsigned long aFinalAction)
+  : mResult(aResult), mFinalAction(aFinalAction) {
+}
+
+NS_IMETHODIMP
+ContentAnalysisAcknowledgement::GetResult(uint32_t* aResult) {
+  *aResult = mResult;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysisAcknowledgement::GetFinalAction(uint32_t* aFinalAction) {
+  *aFinalAction = mFinalAction;
+  return NS_OK;
+}
+
 NS_IMPL_ISUPPORTS(ContentAnalysisRequest, nsIContentAnalysisRequest);
 NS_IMPL_ISUPPORTS(ContentAnalysisResponse, nsIContentAnalysisResponse);
+NS_IMPL_ISUPPORTS(ContentAnalysisAcknowledgement,
+                  nsIContentAnalysisAcknowledgement);
 NS_IMPL_ISUPPORTS(ContentAnalysis, nsIContentAnalysis);
 
 ContentAnalysis::ContentAnalysis() : mPromiseMap("ContentAnalysisRequest::mPendingPromiseMapMutex") {
@@ -521,6 +566,7 @@ ContentAnalysis::GetMightBeActive(bool* aMightBeActive) {
 nsresult ContentAnalysis::RunAnalyzeRequestTask(
     RefPtr<nsIContentAnalysisRequest> aRequest,
     nsString&& aResourceName,
+    bool aAcknowledgeResponse,
     RefPtr<mozilla::dom::Promise> aPromise) {
   nsresult rv = NS_ERROR_FAILURE;
   auto promiseCopy = aPromise;
@@ -567,7 +613,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
           [pbRequest = std::move(pbRequest),
            resourceName = std::move(resourceName),
            promiseHolder = std::move(promiseHolder),
-           requestToken = std::move(requestToken), this, owner] {
+           requestToken = std::move(requestToken), this, owner, aAcknowledgeResponse] {
             nsresult rv = NS_ERROR_FAILURE;
             content_analysis::sdk::ContentAnalysisResponse pbResponse;
             nsCString requestTokenCopy(requestToken);
@@ -578,19 +624,14 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                   [this, rv, owner, promiseHolder = std::move(promiseHolder),
                    resourceName = std::move(resourceName),
                    pbResponse = std::move(pbResponse),
-                   requestToken = std::move(requestToken)]() mutable {
-                    mozilla::Maybe<nsMainThreadPtrHandle<dom::Promise>> entry;
+                   requestToken = std::move(requestToken), aAcknowledgeResponse]() mutable {
+                    bool requestWasCancelled = false;
                     {
                       auto promiseMapRef = mPromiseMap.Lock();
                       auto& promiseMap = promiseMapRef.ref();
-                      entry = promiseMap.MaybeGet(requestToken);
+                      requestWasCancelled = promiseMap.MaybeGet(requestToken).isNothing();
                       // Regardless, remove the entry from the map
                       promiseMap.Remove(requestToken);
-                    }
-                    if (entry.isNothing()) {
-                      // request has already been cancelled, so there's nothing to do
-                      LOGD("Content analysis got response but ignoring because it was already cancelled for token %s", requestToken.get());
-                      return;
                     }
                     if (SUCCEEDED(rv)) {
                       LOGD("Content analysis resolving response promise for token %s", requestToken.get());
@@ -598,11 +639,38 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                           ContentAnalysisResponse::FromProtobuf(std::move(pbResponse));
                       if (response) {
                         response->SetOwner(owner);
+                        if (requestWasCancelled) {
+                          // request has already been cancelled, so there's nothing to do
+                          LOGD("Content analysis got response but ignoring because it was already cancelled for token %s", requestToken.get());
+                          if (aAcknowledgeResponse) {
+                            RefPtr<ContentAnalysisAcknowledgement>
+                                acknowledgement =
+                                    new ContentAnalysisAcknowledgement(
+                                        nsIContentAnalysisAcknowledgement::
+                                            TOO_LATE,
+                                        nsIContentAnalysisAcknowledgement::
+                                            BLOCK);
+                            response->Acknowledge(acknowledgement);
+                          }
+                          return;
+                        }
                         nsCOMPtr<nsIObserverService> obsServ =
                             mozilla::services::GetObserverService();
                         obsServ->NotifyObservers(response, "dlp-response",
                                                  resourceName.get());
                         promiseHolder.get()->MaybeResolve(std::move(response));
+                        if (aAcknowledgeResponse) {
+                          uint32_t action;
+                          rv = response->GetAction(&action);
+                          RefPtr<ContentAnalysisAcknowledgement>
+                              acknowledgement =
+                                  new ContentAnalysisAcknowledgement(
+                                      nsIContentAnalysisAcknowledgement::
+                                          SUCCESS,
+                                      ResponseResultToAcknowledgementResult(
+                                          action));
+                          response->Acknowledge(acknowledgement);
+                        }
                       } else {
                         promiseHolder.get()->MaybeReject(NS_ERROR_FAILURE);
                       }
@@ -655,6 +723,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
 NS_IMETHODIMP
 ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
                                        const nsAString& aResourceName,
+                                       bool aAcknowledgeResponse,
                                        JSContext* aCx,
                                        mozilla::dom::Promise** aPromise) {
   NS_ENSURE_ARG(aRequest);
@@ -675,7 +744,7 @@ ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
   nsString resourceName(aResourceName);
   obsServ->NotifyObservers(aRequest, "dlp-request-made", resourceName.get());
 
-  rv = RunAnalyzeRequestTask(aRequest, std::move(resourceName), promise);
+  rv = RunAnalyzeRequestTask(aRequest, std::move(resourceName), aAcknowledgeResponse, promise);
   if (SUCCEEDED(rv)) {
     promise.forget(aPromise);
   }

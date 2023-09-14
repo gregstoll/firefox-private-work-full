@@ -224,7 +224,7 @@ class nsBaseFilePicker::AsyncShowFilePicker : public mozilla::Runnable {
           new mozilla::contentanalysis::ContentAnalysisRequest(
               nsIContentAnalysisRequest::FILE_ATTACHED, std::move(filePath),
               true, std::move(digestString), std::move(uriString)));
-      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, reason,
+      rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, reason, true,
                                                   aes.cx(), &promise);
       // TODO - better handling
       if (NS_SUCCEEDED(rv)) {
