@@ -161,7 +161,7 @@ interface nsIContentAnalysis : nsISupports
    * See @nsIContentAnalysisResponse.
    */
   [implicit_jscontext]
-  Promise AnalyzeContentRequest(in nsIContentAnalysisRequest aCar, in AString aResourceName);
+  Promise AnalyzeContentRequest(in nsIContentAnalysisRequest aCar, in AString aResourceName, in bool aAcknowledgeResponse);
 
   /**
    * Cancels the request that is in progress. This may not actually cancel the request

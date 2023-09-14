@@ -4159,7 +4159,7 @@ class ContentAnalysisAdditionalFilesPromiseListener
             true, std::move(digestString), std::move(documentURIString)));
     mozilla::dom::Promise* contentAnalysisPromise = nullptr;
     nsresult rv = mContentAnalysis->AnalyzeContentRequest(
-        contentAnalysisRequest, reason, aes.cx(), &contentAnalysisPromise);
+        contentAnalysisRequest, reason, true, aes.cx(), &contentAnalysisPromise);
     mContentAnalysisPromise->Release();
     if (NS_SUCCEEDED(rv)) {
       mContentAnalysisPromise = contentAnalysisPromise;
@@ -4301,7 +4301,7 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
   // TODO - string needs to be localized
   reason.AssignLiteral("clipboard");
   rv = contentAnalysis->AnalyzeContentRequest(
-      contentAnalysisRequest, reason, aes.cx(), &contentAnalysisPromise);
+      contentAnalysisRequest, reason, true, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
@@ -4375,7 +4375,7 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropFilesContentAnalysis(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath), true,
           std::move(digestString), std::move(documentURIStringCopy)));
   rv = contentAnalysis->AnalyzeContentRequest(
-      contentAnalysisRequest, reason, aes.cx(), &contentAnalysisPromise);
+      contentAnalysisRequest, reason, true, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisAdditionalFilesPromiseListener> listener =
         new ContentAnalysisAdditionalFilesPromiseListener(
@@ -4438,7 +4438,7 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropTextContentAnalysis(
   nsString reason;
   reason.AssignLiteral("dropped text");
   rv = contentAnalysis->AnalyzeContentRequest(
-      contentAnalysisRequest, reason, aes.cx(), &contentAnalysisPromise);
+      contentAnalysisRequest, reason, true, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
