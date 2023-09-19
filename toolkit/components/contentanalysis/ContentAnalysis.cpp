@@ -754,10 +754,11 @@ ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
 NS_IMETHODIMP
 ContentAnalysis::CancelContentAnalysisRequest(const nsACString& aRequestToken) {
   nsCString requestToken(aRequestToken);
+  RefPtr<ContentAnalysis> self = this;
   NS_DispatchToMainThread(NS_NewRunnableFunction(
     "CancelContentAnalysisRequest",
-    [this, requestToken]() {
-      auto promiseMapRef = mPromiseMap.Lock();
+    [self, requestToken]() {
+      auto promiseMapRef = self->mPromiseMap.Lock();
       auto& promiseMap = promiseMapRef.ref();
       mozilla::Maybe<nsMainThreadPtrHandle<dom::Promise>> entry = promiseMap.MaybeGet(requestToken);
       LOGD("Content analysis cancelling request %s", requestToken.get());
