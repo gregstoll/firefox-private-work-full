@@ -286,7 +286,9 @@ var ContentAnalysisViews = {
         let browser = caView.notification.dialogBrowsingContext.top.embedderElement;
         let win = browser.ownerGlobal;
         let dialogBox = win.gBrowser.getTabDialogBox(browser);
-        dialogBox.abortAllDialogs();
+        // Don't close any content-modal dialogs, because we could be doing
+        // content analysis on something like a prompt() call.
+        dialogBox.getTabDialogManager().abortDialogs();
       } else {
         console.error("Unexpected content analysis notification - can't close it!");
       }

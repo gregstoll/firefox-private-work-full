@@ -33,6 +33,25 @@ struct MaybeContentAnalysisResult {
       default;
   MaybeContentAnalysisResult& operator=(MaybeContentAnalysisResult&&) = default;
 
+  static contentanalysis::MaybeContentAnalysisResult FromJSONResponse(
+    const JS::Handle<JS::Value>& aValue, JSContext* aCx) {
+    if (aValue.isObject()) {
+      auto* obj = aValue.toObjectOrNull();
+      JS::Handle<JSObject*> handle =
+          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+      JS::Rooted<JS::Value> actionValue(aCx);
+      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+        if (actionValue.isNumber()) {
+          double actionNumber = actionValue.toNumber();
+          return contentanalysis::MaybeContentAnalysisResult(
+              static_cast<int32_t>(actionNumber));
+        }
+      }
+    }
+    return contentanalysis::MaybeContentAnalysisResult(
+        contentanalysis::NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE);
+  }
+
   bool ShouldAllowContent() const {
     if (value.is<NoContentAnalysisResult>()) {
       NoContentAnalysisResult noResult = value.as<NoContentAnalysisResult>();

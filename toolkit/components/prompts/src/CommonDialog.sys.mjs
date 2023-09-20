@@ -140,6 +140,9 @@ CommonDialog.prototype = {
     if (this.ui.spinnerContainer && this.args.showSpinner) {
       this.ui.spinnerContainer.hidden = false;
     }
+    if (this.ui.requestingUrl && this.args.requestingUrl) {
+      this.ui.requestingUrl.value = this.args.requestingUrl;
+    }
 
     // Set button labels and visibility
     //

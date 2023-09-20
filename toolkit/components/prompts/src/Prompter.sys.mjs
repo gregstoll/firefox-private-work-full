@@ -1174,6 +1174,7 @@ class ModalPrompter {
     let id = "id" + Services.uuid.generateUUID().toString();
 
     args._remoteId = id;
+    args.requestingUrl = this.browsingContext.window?.document.URL;
 
     let returnedArgs;
     try {
