@@ -323,6 +323,8 @@ bool gIsGtest = false;
 bool gKioskMode = false;
 int gKioskMonitor = -1;
 
+bool gAllowContentAnalysis = false;
+
 nsString gAbsoluteArgv0Path;
 
 #if defined(XP_WIN)
@@ -3999,6 +4001,8 @@ int XREMain::XRE_mainInit(bool* aExitFlag) {
     gKioskMode = true;
     gKioskMonitor = atoi(kioskMonitorNumber);
   }
+
+  gAllowContentAnalysis = CheckArgExists("allow-content-analysis") == ARG_FOUND;
 
   nsresult rv;
   ArgResult ar;
