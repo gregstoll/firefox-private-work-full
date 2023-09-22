@@ -11,12 +11,14 @@
 
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/MouseEvents.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/DataTransfer.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/DocumentInlines.h"
 #include "mozilla/dom/Selection.h"
 
 #include "nsAString.h"
+#include "nsClipboardProxy.h"
 #include "nsCOMPtr.h"
 #include "nsContentUtils.h"
 #include "nsDebug.h"
@@ -193,7 +195,15 @@ nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
     return NS_OK;  // XXX Why?
   }
   // Get the Data from the clipboard.
-  rv = clipboard->GetData(transferable, aClipboardType);
+  auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  if (browserChild && clipboardProxy) {
+    rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType,
+                                                 browserChild);
+  } else {
+    rv = clipboard->GetData(transferable, aClipboardType);
+  }
+
   if (NS_FAILED(rv)) {
     NS_WARNING("nsIClipboard::GetData() failed, but ignored");
     return NS_OK;  // XXX Why?

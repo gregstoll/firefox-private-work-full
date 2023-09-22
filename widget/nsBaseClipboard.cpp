@@ -9,6 +9,8 @@
 #include "nsIClipboardOwner.h"
 #include "nsError.h"
 #include "nsXPCOM.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/Document.h"
 
 using mozilla::GenericPromise;
 using mozilla::LogLevel;

@@ -6,8 +6,11 @@
 
 #include "mozilla/dom/ClipboardItem.h"
 
+#include "mozilla/dom/BrowserChild.h"
+#include "mozilla/dom/Document.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/Record.h"
+#include "nsClipboardProxy.h"
 #include "nsComponentManagerUtils.h"
 #include "nsIClipboard.h"
 #include "nsIInputStream.h"
@@ -96,68 +99,82 @@ void ClipboardItem::ItemEntry::LoadDataFromSystemClipboard(
 
   mIsLoadingData = true;
   nsCOMPtr<nsITransferable> trans(&aTransferable);
-  clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
-      ->Then(
-          GetMainThreadSerialEventTarget(), __func__,
-          /* resolved */
-          [self = RefPtr{this}, trans]() {
-            self->mIsLoadingData = false;
-            self->mLoadingPromise.Complete();
+  auto* document = GetEntryDocument();
+  auto* browserChild =
+      document ? BrowserChild::GetFrom(document->GetDocShell()) : nullptr;
+  nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+  auto resolvedCallback = [self = RefPtr{this}, trans]() {
+    self->mIsLoadingData = false;
+    self->mLoadingPromise.Complete();
 
-            nsCOMPtr<nsISupports> data;
-            nsresult rv = trans->GetTransferData(
-                NS_ConvertUTF16toUTF8(self->Type()).get(),
-                getter_AddRefs(data));
-            if (NS_WARN_IF(NS_FAILED(rv))) {
-              self->RejectPendingPromises(rv);
-              return;
-            }
+    nsCOMPtr<nsISupports> data;
+    nsresult rv = trans->GetTransferData(
+        NS_ConvertUTF16toUTF8(self->Type()).get(), getter_AddRefs(data));
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      self->RejectPendingPromises(rv);
+      return;
+    }
 
-            RefPtr<Blob> blob;
-            if (nsCOMPtr<nsISupportsString> supportsstr =
-                    do_QueryInterface(data)) {
-              nsAutoString str;
-              supportsstr->GetData(str);
+    RefPtr<Blob> blob;
+    if (nsCOMPtr<nsISupportsString> supportsstr = do_QueryInterface(data)) {
+      nsAutoString str;
+      supportsstr->GetData(str);
 
-              blob = Blob::CreateStringBlob(
-                  self->mGlobal, NS_ConvertUTF16toUTF8(str), self->Type());
-            } else if (nsCOMPtr<nsIInputStream> istream =
-                           do_QueryInterface(data)) {
-              uint64_t available;
-              void* data = nullptr;
-              nsresult rv =
-                  NS_ReadInputStreamToBuffer(istream, &data, -1, &available);
-              if (NS_WARN_IF(NS_FAILED(rv))) {
-                self->RejectPendingPromises(rv);
-                return;
-              }
+      blob = Blob::CreateStringBlob(self->mGlobal, NS_ConvertUTF16toUTF8(str),
+                                    self->Type());
+    } else if (nsCOMPtr<nsIInputStream> istream = do_QueryInterface(data)) {
+      uint64_t available;
+      void* data = nullptr;
+      nsresult rv = NS_ReadInputStreamToBuffer(istream, &data, -1, &available);
+      if (NS_WARN_IF(NS_FAILED(rv))) {
+        self->RejectPendingPromises(rv);
+        return;
+      }
 
-              blob = Blob::CreateMemoryBlob(self->mGlobal, data, available,
-                                            self->Type());
-            } else if (nsCOMPtr<nsISupportsCString> supportscstr =
-                           do_QueryInterface(data)) {
-              nsAutoCString str;
-              supportscstr->GetData(str);
+      blob =
+          Blob::CreateMemoryBlob(self->mGlobal, data, available, self->Type());
+    } else if (nsCOMPtr<nsISupportsCString> supportscstr =
+                   do_QueryInterface(data)) {
+      nsAutoCString str;
+      supportscstr->GetData(str);
 
-              blob = Blob::CreateStringBlob(self->mGlobal, str, self->Type());
-            }
+      blob = Blob::CreateStringBlob(self->mGlobal, str, self->Type());
+    }
 
-            if (!blob) {
-              self->RejectPendingPromises(NS_ERROR_DOM_DATA_ERR);
-              return;
-            }
+    if (!blob) {
+      self->RejectPendingPromises(NS_ERROR_DOM_DATA_ERR);
+      return;
+    }
 
-            OwningStringOrBlob clipboardData;
-            clipboardData.SetAsBlob() = std::move(blob);
-            self->MaybeResolvePendingPromises(std::move(clipboardData));
-          },
-          /* rejected */
-          [self = RefPtr{this}](nsresult rv) {
-            self->mIsLoadingData = false;
-            self->mLoadingPromise.Complete();
-            self->RejectPendingPromises(rv);
-          })
-      ->Track(mLoadingPromise);
+    OwningStringOrBlob clipboardData;
+    clipboardData.SetAsBlob() = std::move(blob);
+    self->MaybeResolvePendingPromises(std::move(clipboardData));
+  };
+  auto rejectedCallback = [self = RefPtr{this}](nsresult rv) {
+    self->mIsLoadingData = false;
+    self->mLoadingPromise.Complete();
+    self->RejectPendingPromises(rv);
+  };
+  if (browserChild && clipboardProxy) {
+    clipboardProxy
+        ->AsyncGetDataWithBrowserCheck(trans, nsIClipboard::kGlobalClipboard,
+                                       browserChild)
+        ->Then(GetMainThreadSerialEventTarget(), __func__,
+               /* resolved */
+               std::move(resolvedCallback),
+               /* rejected */
+               std::move(rejectedCallback))
+        ->Track(mLoadingPromise);
+
+  } else {
+    clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
+        ->Then(GetMainThreadSerialEventTarget(), __func__,
+               /* resolved */
+               std::move(resolvedCallback),
+               /* rejected */
+               std::move(rejectedCallback))
+        ->Track(mLoadingPromise);
+  }
 }
 
 void ClipboardItem::ItemEntry::LoadDataFromDataPromise(Promise& aDataPromise) {

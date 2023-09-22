@@ -22,6 +22,11 @@ static mozilla::LazyLogModule sWidgetClipboardLog("WidgetClipboard");
 class nsITransferable;
 class nsIClipboardOwner;
 class nsIWidget;
+namespace mozilla {
+namespace dom {
+class BrowserParent;
+}
+}  // namespace mozilla
 
 /**
  * A helper base class to implement nsIClipboard::SetData/AsyncSetData, so that

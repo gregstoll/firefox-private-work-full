@@ -21,6 +21,7 @@
 #include "mozilla/dom/FileSystemFileEntry.h"
 #include "imgIContainer.h"
 #include "imgITools.h"
+#include "nsClipboardProxy.h"
 #include "nsComponentManagerUtils.h"
 #include "nsIClipboard.h"
 #include "nsIFile.h"
@@ -173,9 +174,26 @@ void DataTransferItem::FillInExternalData() {
         return;
       }
 
-      nsresult rv = clipboard->GetData(trans, mDataTransfer->ClipboardType());
-      if (NS_WARN_IF(NS_FAILED(rv))) {
-        return;
+      nsCOMPtr<nsIClipboardProxy> clipboardProxy = do_QueryInterface(clipboard);
+      nsCOMPtr<nsIGlobalObject> global = GetGlobalFromDataTransfer();
+      nsGlobalWindowInner* inner =
+          nsGlobalWindowInner::Cast(global->GetAsInnerWindow());
+      MOZ_ASSERT(inner);
+
+      if (inner) {
+        auto* browserChild =
+            BrowserChild::GetFrom(inner->GetDocument()->GetDocShell());
+        nsresult rv;
+        if (browserChild && clipboardProxy) {
+          rv = clipboardProxy->GetDataWithBrowserCheck(
+              trans, mDataTransfer->ClipboardType(), browserChild);
+        } else {
+          rv = clipboard->GetData(trans, mDataTransfer->ClipboardType());
+        }
+
+        if (NS_WARN_IF(NS_FAILED(rv))) {
+          return;
+        }
       }
     } else {
       nsCOMPtr<nsIDragSession> dragSession = nsContentUtils::GetDragSession();

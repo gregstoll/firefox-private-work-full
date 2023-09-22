@@ -132,6 +132,15 @@ interface nsIContentAnalysis : nsISupports
   readonly attribute bool isActive;
 
   /**
+   * True if content analysis might be active, and False if content analysis
+   * is definitely not active. Reading this property is guaranteed
+   * to work from a content process, and can be used to avoid having to call
+   * into the parent process to determine whether content analysis is actually
+   * active.
+   */
+  readonly attribute bool mightBeActive;
+
+  /**
    * Consults content analysis server, if any, to request a permission
    * decision for a network operation.  Allows blocking downloading/
    * uploading/printing/etc, based on the request.

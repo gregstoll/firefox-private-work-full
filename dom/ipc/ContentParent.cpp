@@ -327,6 +327,17 @@
 #include "nsIToolkitProfileService.h"
 #include "nsIToolkitProfile.h"
 
+#include "ContentAnalysis.h"
+#include "nsIContentAnalysis.h"
+#include "nsGlobalWindowInner.h"
+#include "mozilla/Components.h"
+#include "mozilla/dom/AutoEntryScript.h"
+#include "mozilla/dom/BrowserParent.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
+#include "mozilla/dom/Document.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
+#include "nsISupportsPrimitives.h"
+
 static NS_DEFINE_CID(kCClipboardCID, NS_CLIPBOARD_CID);
 
 using base::KillProcess;
@@ -3583,7 +3594,7 @@ mozilla::ipc::IPCResult ContentParent::RecvGetExternalClipboardFormats(
 
 mozilla::ipc::IPCResult ContentParent::RecvGetClipboardAsync(
     nsTArray<nsCString>&& aTypes, const int32_t& aWhichClipboard,
-    GetClipboardAsyncResolver&& aResolver) {
+    PBrowserParent* aBrowser, GetClipboardAsyncResolver&& aResolver) {
   nsresult rv;
   // Retrieve clipboard
   nsCOMPtr<nsIClipboard> clipboard(do_GetService(kCClipboardCID, &rv));
@@ -3600,7 +3611,16 @@ mozilla::ipc::IPCResult ContentParent::RecvGetClipboardAsync(
   }
 
   // Get data from clipboard
+#if 0
+  BrowserParent* parent = nullptr;
+  if (aBrowser) {
+    parent = BrowserParent::GetFrom(aBrowser);
+  }
+#endif
+
   nsCOMPtr<nsITransferable> trans = result.unwrap();
+
+  // DLP: passing parent???
   clipboard->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
       ->Then(
           GetMainThreadSerialEventTarget(), __func__,
