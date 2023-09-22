@@ -101,6 +101,16 @@ interface nsIFilePicker : nsISupports
    */
   void appendRawFilter(in AString filter);
 
+  /**
+   * Removes a selected file. This is used if content analysis is active and
+   * blocks the selected file.
+   *
+   * @param     file    the file to remove
+   *
+   * @throws NS_ERROR_FILE_NOT_FOUND if the file is not selected.
+   */
+  void removeFile(in nsIFile file);
+
  /**
   * The filename that should be suggested to the user as a default. This should
   * include the extension.

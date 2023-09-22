@@ -195,6 +195,12 @@ mozilla::ipc::IPCResult nsFilePickerProxy::Recv__delete__(
 }
 
 NS_IMETHODIMP
+nsFilePickerProxy::RemoveFile(nsIFile* aFile) {
+  MOZ_ASSERT(false, "RemoveFile is unimplemented");
+  return NS_ERROR_FAILURE;
+}
+
+NS_IMETHODIMP
 nsFilePickerProxy::GetDomFileOrDirectory(nsISupports** aValue) {
   *aValue = nullptr;
   if (mFilesOrDirectories.IsEmpty()) {
