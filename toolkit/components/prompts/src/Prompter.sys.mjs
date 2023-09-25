@@ -1455,6 +1455,10 @@ class ModalPrompter {
       }
     }
 
+    if (flags & Ci.nsIPrompt.SHOW_SPINNER) {
+      args.showSpinner = true;
+    }
+
     if (this.async) {
       return this.openPromptAsync(args, result => ({
         checked: !!result.checked,

@@ -4101,25 +4101,6 @@ mozilla::ipc::IPCResult BrowserParent::RecvShowDynamicToolbar() {
 
 namespace {
 
-static contentanalysis::MaybeContentAnalysisResult ParseContentAnalysisResponse(
-    const JS::Handle<JS::Value>& aValue, JSContext* aCx) {
-  if (aValue.isObject()) {
-    auto* obj = aValue.toObjectOrNull();
-    JS::Handle<JSObject*> handle =
-        JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-    JS::Rooted<JS::Value> actionValue(aCx);
-    if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
-      if (actionValue.isNumber()) {
-        double actionNumber = actionValue.toNumber();
-        return contentanalysis::MaybeContentAnalysisResult(
-            static_cast<int32_t>(actionNumber));
-      }
-    }
-  }
-  return contentanalysis::MaybeContentAnalysisResult(
-      contentanalysis::NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE);
-}
-
 class ContentAnalysisPromiseListener
     : public mozilla::dom::PromiseNativeHandler {
   NS_DECL_ISUPPORTS
@@ -4132,7 +4113,8 @@ class ContentAnalysisPromiseListener
   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
     contentanalysis::MaybeContentAnalysisResult result =
-        ParseContentAnalysisResponse(aValue, aCx);
+        contentanalysis::MaybeContentAnalysisResult::FromJSONResponse(aValue,
+                                                                      aCx);
     mResolver(result);
     mContentAnalysisPromise->Release();
   }
@@ -4206,7 +4188,8 @@ class ContentAnalysisAdditionalFilesPromiseListener
   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
     contentanalysis::MaybeContentAnalysisResult result =
-        ParseContentAnalysisResponse(aValue, aCx);
+        contentanalysis::MaybeContentAnalysisResult::FromJSONResponse(aValue,
+                                                                      aCx);
     // Exit early if we get a block result
     if (!result.ShouldAllowContent() ||
         mNextFilePathToProcess >= mFilePaths.Length()) {

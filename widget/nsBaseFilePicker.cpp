@@ -88,20 +88,11 @@ class ContentAnalysisPromiseListener : public PromiseNativeHandler {
 
   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
-    if (aValue.isObject()) {
-      auto* obj = aValue.toObjectOrNull();
-      JS::Handle<JSObject*> handle =
-          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-      JS::Rooted<JS::Value> actionValue(aCx);
-      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
-        if (actionValue.isNumber()) {
-          double actionNumber = actionValue.toNumber();
-          if (actionNumber ==
-              static_cast<double>(nsIContentAnalysisResponse::BLOCK)) {
-            mFilePicker->RemoveFile(mFile);
-          }
-        }
-      }
+    mozilla::contentanalysis::MaybeContentAnalysisResult result =
+        mozilla::contentanalysis::MaybeContentAnalysisResult::FromJSONResponse(
+            aValue, aCx);
+    if (!result.ShouldAllowContent()) {
+      mFilePicker->RemoveFile(mFile);
     }
     if (mCallback) {
       mCallback->Done(mResult);
