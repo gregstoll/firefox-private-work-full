@@ -51,6 +51,33 @@ var ContentAnalysisViews = {
     //    }
 
     this.initializeDownloadCA();
+
+    ChromeUtils.defineLazyGetter(this, "l10n", function () {
+      return new Localization(
+        ["toolkit/contentanalysis/contentanalysis.ftl"],
+        true
+      );
+    });
+  },
+
+  // TODO - I guess we're stuck with having to do this because these are defined
+  // in the SDK? But yuck.
+  responseResultToAcknowledgementResult(responseResult) {
+    switch (responseResult) {
+      case Ci.nsIContentAnalysisResponse.REPORT_ONLY:
+        return Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY;
+      case Ci.nsIContentAnalysisResponse.WARN:
+        return Ci.nsIContentAnalysisAcknowledgement.WARN;
+      case Ci.nsIContentAnalysisResponse.BLOCK:
+        return Ci.nsIContentAnalysisAcknowledgement.BLOCK;
+      case Ci.nsIContentAnalysisResponse.ALLOW:
+        return Ci.nsIContentAnalysisAcknowledgement.ALLOW;
+      case Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED:
+        return Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED;
+      default:
+        // TODO - assert or warn here?
+        return Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED;
+    }
   },
 
   /**
@@ -82,13 +109,57 @@ var ContentAnalysisViews = {
                 await Downloads.getList(Downloads.ALL)
               ).getAll();
               for (var download of allDownloads) {
-                downloadsView._clearDownloadViews(download);
+                this._clearDownloadViews(download);
               }
               Services.obs.removeObserver(
                 downloadsView,
                 "quit-application-requested"
               );
+              Services.obs.removeObserver(downloadsView, "dlp-request-made");
+              Services.obs.removeObserver(downloadsView, "dlp-response");
             }
+            break;
+          case "dlp-request-made":
+            // TODO - check correct window
+            const SLOW_TIMEOUT_MS = 3000; // 3 sec
+
+            // Start timer that, when it expires,
+            // presents a "slow CA check" message.
+            let request = aSubj.QueryInterface(Ci.nsIContentAnalysisRequest);
+            this.dlpResourceName = await this._getResourceNameFromRequest(
+              request
+            );
+            if (!this.dlpBusyView) {
+              this.dlpBusyView = {
+                timer: setTimeout(() => {
+                  this.dlpBusyView = {
+                    notification: this._showSlowCAMessage(
+                      request.analysisType,
+                      this.dlpResourceName
+                    ),
+                  };
+                }, SLOW_TIMEOUT_MS),
+              };
+            }
+            break;
+          case "dlp-response":
+            // TODO - check correct window
+            // Cancels timer or slow message UI,
+            // if present, and possibly presents the CA verdict.
+            this._disconnectFromView(this.dlpBusyView);
+            this.dlpBusyView = undefined;
+            const responseResult =
+              aSubj?.QueryInterface(Ci.nsIContentAnalysisResponse)?.action ??
+              Ci.nsIContentAnalysisResponse.ACTION_UNSPECIFIED;
+            this.resultView = {
+              notification: this._showCAResult(
+                Ci.nsIContentAnalysisRequest
+                  .FILE_DOWNLOADED /* TODO fix this type */,
+                this.dlpResourceName,
+                this.responseResultToAcknowledgementResult(responseResult)
+              ),
+            };
+            break;
         }
       },
 
@@ -163,6 +234,8 @@ var ContentAnalysisViews = {
     };
 
     Services.obs.addObserver(downloadsView, "quit-application-requested");
+    Services.obs.addObserver(downloadsView, "dlp-request-made");
+    Services.obs.addObserver(downloadsView, "dlp-response");
     let downloadList = await Downloads.getList(Downloads.ALL);
     await downloadList.addView(downloadsView);
     window.addEventListener("unload", async () => {
@@ -172,6 +245,8 @@ var ContentAnalysisViews = {
           downloadsView,
           "quit-application-requested"
         );
+        Services.obs.removeObserver(downloadsView, "dlp-request-made");
+        Services.obs.removeObserver(downloadsView, "dlp-response");
         await downloadList.removeView(downloadsView);
       }
     });
@@ -221,6 +296,31 @@ var ContentAnalysisViews = {
     return null;
   },
 
+  async _getResourceNameFromRequest(aRequest) {
+    if (
+      aRequest.operationTypeForDisplay ==
+      Ci.nsIContentAnalysisRequest.OPERATION_CUSTOMDISPLAYSTRING
+    ) {
+      return aRequest.operationDisplayString;
+    }
+    let key;
+    switch (aRequest.operationTypeForDisplay) {
+      case Ci.nsIContentAnalysisRequest.OPERATION_CLIPBOARD:
+        key = "contentanalysis-operationtype-clipboard";
+        break;
+      case Ci.nsIContentAnalysisRequest.OPERATION_DROPPEDTEXT:
+        key = "contentanalysis-operationtype-droppedtext";
+        break;
+    }
+    if (!key) {
+      console.error(
+        "Unknown operationTypeForDisplay: " + aRequest.operationTypeForDisplay
+      );
+      return "";
+    }
+    return this.l10n.formatValue(key);
+  },
+
   /**
    * Show a message to the user to indicate that a CA request is taking
    * a long time.
@@ -228,7 +328,8 @@ var ContentAnalysisViews = {
   _showSlowCAMessage(aOperation, aResourceName) {
     // TODO: Better message
     return this._showMessage(
-      "The Content Analysis Tool is taking a looooong time to respond..."
+      "The Content Analysis Tool is taking a looooong time to respond for resource " +
+        aResourceName
     );
   },
 
@@ -245,20 +346,23 @@ var ContentAnalysisViews = {
         // We don't need to show anything
         break;
       case Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY:
-        message = "CA responded with REPORT_ONLY";
+        message = "CA responded with REPORT_ONLY for resource " + aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_FAST_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.WARN:
-        message = "CA responded with WARN";
+        message = "CA responded with WARN for resource " + aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.BLOCK:
-        message = "CA responded with BLOCK.  Transfer denied.";
+        message =
+          "CA responded with BLOCK. Transfer denied for resource " +
+          aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.ACTION_UNSPECIFIED:
         message =
-          "An error occurred in communicating with the CA.  Transfer denied.";
+          "An error occurred in communicating with the CA. Transfer denied for resource " +
+          aResourceName;
         timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
         break;
     }

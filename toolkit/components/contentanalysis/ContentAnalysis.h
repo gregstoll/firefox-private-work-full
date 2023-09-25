@@ -7,7 +7,9 @@
 #define mozilla_contentanalysis_h
 
 #include "mozilla/DataMutex.h"
+#include "mozilla/Mutex.h"
 #include "nsIContentAnalysis.h"
+#include "nsProxyRelease.h"
 #include "nsString.h"
 
 #include <string>
@@ -27,7 +29,7 @@ class ContentAnalysisRequest : public nsIContentAnalysisRequest {
 
   ContentAnalysisRequest(unsigned long aAnalysisType, nsAString&& aString,
                          bool aStringIsFilePath, nsACString&& aSha256Digest,
-                         nsAString&& aUrl);
+                         nsAString&& aUrl, unsigned long aResourceNameType);
 
  private:
   virtual ~ContentAnalysisRequest() = default;
@@ -53,6 +55,16 @@ class ContentAnalysisRequest : public nsIContentAnalysisRequest {
 
   // Email address of user.
   nsString mEmail;
+
+  // Unique identifier for this request
+  nsCString mRequestToken;
+
+  // Type of text to display, see nsIContentAnalysisRequest for values
+  unsigned long mOperationTypeForDisplay;
+
+  // String to display if mOperationTypeForDisplay is
+  // OPERATION_CUSTOMDISPLAYSTRING
+  nsString mOperationDisplayString;
 };
 
 class ContentAnalysis : public nsIContentAnalysis {
@@ -62,7 +74,7 @@ class ContentAnalysis : public nsIContentAnalysis {
 
   nsresult RunAcknowledgeTask(
       nsIContentAnalysisAcknowledgement* aAcknowledgement,
-      const std::string& aRequestToken);
+      const nsCString& aRequestToken);
 
   ContentAnalysis() = default;
 
@@ -82,18 +94,23 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
 
   static RefPtr<ContentAnalysisResponse> FromProtobuf(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
+  static RefPtr<ContentAnalysisResponse> FromAction(
+      unsigned long aAction, const nsACString& aRequestToken);
 
   void SetOwner(RefPtr<ContentAnalysis> aOwner);
 
  private:
   virtual ~ContentAnalysisResponse() = default;
-  explicit ContentAnalysisResponse(
+  ContentAnalysisResponse(
       content_analysis::sdk::ContentAnalysisResponse&& aResponse);
+  ContentAnalysisResponse(unsigned long aAction,
+                          const nsACString& aRequestToken);
 
   // See nsIContentAnalysisResponse for values
   unsigned long mAction;
 
-  std::string mRequestToken;
+  // Identifier for the corresponding nsIContentAnalysisRequest
+  nsCString mRequestToken;
 
   // ContentAnalysis (or, more precisely, it's Client object) must outlive
   // the transaction.

@@ -4258,7 +4258,8 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
     contentAnalysisRequest =
         new mozilla::contentanalysis::ContentAnalysisRequest(
             nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text), false,
-            std::move(emptyDigest), std::move(documentURIString));
+            std::move(emptyDigest), std::move(documentURIString),
+            nsIContentAnalysisRequest::OPERATION_CLIPBOARD);
   } else {
     rv = trans->GetTransferData(kFileMime, getter_AddRefs(transferData));
     if (NS_SUCCEEDED(rv)) {
@@ -4281,7 +4282,8 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
               new mozilla::contentanalysis::ContentAnalysisRequest(
                   nsIContentAnalysisRequest::BULK_DATA_ENTRY,
                   std::move(filePath), true, std::move(digestString),
-                  std::move(documentURIString));
+                  std::move(documentURIString),
+                  nsIContentAnalysisRequest::OPERATION_CUSTOMDISPLAYSTRING);
         }
       }
     }
@@ -4357,7 +4359,8 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropFilesContentAnalysis(
   nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
       new mozilla::contentanalysis::ContentAnalysisRequest(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath), true,
-          std::move(digestString), std::move(documentURIString)));
+          std::move(digestString), std::move(documentURIString),
+          nsIContentAnalysisRequest::OPERATION_CUSTOMDISPLAYSTRING));
   rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
                                               &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
@@ -4415,7 +4418,8 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropTextContentAnalysis(
   nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
       new mozilla::contentanalysis::ContentAnalysisRequest(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(aText), false,
-          std::move(emptyDigest), std::move(documentURIString)));
+          std::move(emptyDigest), std::move(documentURIString),
+          nsIContentAnalysisRequest::OPERATION_DROPPEDTEXT));
   rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
                                               &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
