@@ -4214,7 +4214,7 @@ class ContentAnalysisAdditionalFilesPromiseListener
             nsIContentAnalysisRequest::OPERATION_CUSTOMDISPLAYSTRING));
     mozilla::dom::Promise* contentAnalysisPromise = nullptr;
     nsresult rv = mContentAnalysis->AnalyzeContentRequest(
-        contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+        contentAnalysisRequest, true, aes.cx(), &contentAnalysisPromise);
     mContentAnalysisPromise->Release();
     if (NS_SUCCEEDED(rv)) {
       mContentAnalysisPromise = contentAnalysisPromise;
@@ -4361,8 +4361,8 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
             ERROR_COULD_NOT_GET_DATA));
     return IPC_OK();
   }
-  rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
-                                              &contentAnalysisPromise);
+  rv = contentAnalysis->AnalyzeContentRequest(
+      contentAnalysisRequest, true, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(std::move(aResolver),
@@ -4431,8 +4431,8 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropFilesContentAnalysis(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath), true,
           std::move(digestString), std::move(documentURIString),
           nsIContentAnalysisRequest::OPERATION_CUSTOMDISPLAYSTRING));
-  rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
-                                              &contentAnalysisPromise);
+  rv = contentAnalysis->AnalyzeContentRequest(
+      contentAnalysisRequest, true, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisAdditionalFilesPromiseListener> listener =
         new ContentAnalysisAdditionalFilesPromiseListener(
@@ -4493,8 +4493,8 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropTextContentAnalysis(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(aText), false,
           std::move(emptyDigest), std::move(documentURIString),
           nsIContentAnalysisRequest::OPERATION_DROPPEDTEXT));
-  rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
-                                              &contentAnalysisPromise);
+  rv = contentAnalysis->AnalyzeContentRequest(
+      contentAnalysisRequest, true, aes.cx(), &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
     RefPtr<ContentAnalysisPromiseListener> listener =
         new ContentAnalysisPromiseListener(std::move(aResolver),
