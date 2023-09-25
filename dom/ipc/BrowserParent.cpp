@@ -4101,6 +4101,25 @@ mozilla::ipc::IPCResult BrowserParent::RecvShowDynamicToolbar() {
 
 namespace {
 
+static contentanalysis::MaybeContentAnalysisResult ParseContentAnalysisResponse(
+    const JS::Handle<JS::Value>& aValue, JSContext* aCx) {
+  if (aValue.isObject()) {
+    auto* obj = aValue.toObjectOrNull();
+    JS::Handle<JSObject*> handle =
+        JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+    JS::Rooted<JS::Value> actionValue(aCx);
+    if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+      if (actionValue.isNumber()) {
+        double actionNumber = actionValue.toNumber();
+        return contentanalysis::MaybeContentAnalysisResult(
+            static_cast<int32_t>(actionNumber));
+      }
+    }
+  }
+  return contentanalysis::MaybeContentAnalysisResult(
+      contentanalysis::NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE);
+}
+
 class ContentAnalysisPromiseListener
     : public mozilla::dom::PromiseNativeHandler {
   NS_DECL_ISUPPORTS
@@ -4112,23 +4131,9 @@ class ContentAnalysisPromiseListener
         mContentAnalysisPromise(aContentAnalysisPromise) {}
   virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
                                 mozilla::ErrorResult& aRv) override {
-    if (aValue.isObject()) {
-      auto* obj = aValue.toObjectOrNull();
-      JS::Handle<JSObject*> handle =
-          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
-      JS::Rooted<JS::Value> actionValue(aCx);
-      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
-        if (actionValue.isNumber()) {
-          double actionNumber = actionValue.toNumber();
-          mResolver(contentanalysis::MaybeContentAnalysisResult(
-              static_cast<int32_t>(actionNumber)));
-          mContentAnalysisPromise->Release();
-          return;
-        }
-      }
-    }
-    mResolver(contentanalysis::MaybeContentAnalysisResult(
-        contentanalysis::NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE));
+    contentanalysis::MaybeContentAnalysisResult result =
+        ParseContentAnalysisResponse(aValue, aCx);
+    mResolver(result);
     mContentAnalysisPromise->Release();
   }
 
@@ -4181,6 +4186,85 @@ static nsresult GetFileDigest(const nsString& filePath,
   return NS_OK;
 }
 
+class ContentAnalysisAdditionalFilesPromiseListener
+    : public mozilla::dom::PromiseNativeHandler {
+  NS_DECL_ISUPPORTS
+
+  ContentAnalysisAdditionalFilesPromiseListener(
+      std::function<void(const IPC::MaybeContentAnalysisResult&)> aResolver,
+      mozilla::dom::Promise* aContentAnalysisPromise,
+      nsTArray<nsString>&& aFilePaths, uint32_t aNextFilePathToProcess,
+      nsGlobalWindowInner* aWindowInner, nsString&& aDocumentURIString,
+      nsCOMPtr<nsIContentAnalysis> aContentAnalysis)
+      : mResolver(aResolver),
+        mContentAnalysisPromise(aContentAnalysisPromise),
+        mFilePaths(std::move(aFilePaths)),
+        mNextFilePathToProcess(aNextFilePathToProcess),
+        mWindowInner(aWindowInner),
+        mDocumentURIString(aDocumentURIString),
+        mContentAnalysis(aContentAnalysis) {}
+  virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    contentanalysis::MaybeContentAnalysisResult result =
+        ParseContentAnalysisResponse(aValue, aCx);
+    // Exit early if we get a block result
+    if (!result.ShouldAllowContent() ||
+        mNextFilePathToProcess >= mFilePaths.Length()) {
+      mResolver(result);
+      mContentAnalysisPromise->Release();
+      return;
+    }
+    // Check the next file
+    nsString documentURIString = mDocumentURIString;
+    nsString filePath = mFilePaths[mNextFilePathToProcess];
+    ++mNextFilePathToProcess;
+    nsCString digestString;
+    if (NS_FAILED(GetFileDigest(filePath, digestString))) {
+      mResolver(contentanalysis::MaybeContentAnalysisResult(
+          contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+      mContentAnalysisPromise->Release();
+      return;
+    }
+    mozilla::dom::AutoEntryScript aes(mWindowInner,
+                                      "content analysis on drag/drop file(s)");
+    nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
+        new mozilla::contentanalysis::ContentAnalysisRequest(
+            nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath),
+            true, std::move(digestString), std::move(documentURIString),
+            nsIContentAnalysisRequest::OPERATION_CUSTOMDISPLAYSTRING));
+    mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+    nsresult rv = mContentAnalysis->AnalyzeContentRequest(
+        contentAnalysisRequest, aes.cx(), &contentAnalysisPromise);
+    mContentAnalysisPromise->Release();
+    if (NS_SUCCEEDED(rv)) {
+      mContentAnalysisPromise = contentAnalysisPromise;
+      contentAnalysisPromise->AppendNativeHandler(this);
+    } else {
+      mResolver(contentanalysis::MaybeContentAnalysisResult(
+          contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    }
+  }
+
+  virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // call to content analysis failed
+    mResolver(contentanalysis::MaybeContentAnalysisResult(
+        contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    mContentAnalysisPromise->Release();
+  }
+
+ private:
+  ~ContentAnalysisAdditionalFilesPromiseListener() = default;
+  std::function<void(const IPC::MaybeContentAnalysisResult&)> mResolver;
+  mozilla::dom::Promise* mContentAnalysisPromise;
+  nsTArray<nsString> mFilePaths;
+  uint32_t mNextFilePathToProcess;
+  nsGlobalWindowInner* mWindowInner;
+  nsString mDocumentURIString;
+  nsCOMPtr<nsIContentAnalysis> mContentAnalysis;
+};
+
+NS_IMPL_ISUPPORTS0(ContentAnalysisAdditionalFilesPromiseListener)
 }  // namespace
 
 mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
@@ -4342,8 +4426,10 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropFilesContentAnalysis(
     return IPC_OK();
   }
   nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+  nsString documentURIStringCopy = documentURIString;
 
-  // TODO - just handles one file
+  // Start by analyzing the first file, and the
+  // ContentAnalysisAdditionalFilesPromiseListener will handle the rest.
   nsString filePath = aFilePaths[0];
   nsCString digestString;
   if (NS_FAILED(GetFileDigest(filePath, digestString))) {
@@ -4352,10 +4438,10 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropFilesContentAnalysis(
     return IPC_OK();
   }
 
-  mozilla::dom::AutoEntryScript aes(
-      nsGlobalWindowInner::Cast(
-          GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
-      "content analysis on clipboard copy");
+  nsGlobalWindowInner* windowInner = nsGlobalWindowInner::Cast(
+      GetOwnerElement()->OwnerDoc()->GetInnerWindow());
+  mozilla::dom::AutoEntryScript aes(windowInner,
+                                    "content analysis on clipboard copy");
   nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest(
       new mozilla::contentanalysis::ContentAnalysisRequest(
           nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(filePath), true,
@@ -4364,8 +4450,10 @@ mozilla::ipc::IPCResult BrowserParent::RecvDoDragAndDropFilesContentAnalysis(
   rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
                                               &contentAnalysisPromise);
   if (NS_SUCCEEDED(rv)) {
-    RefPtr<ContentAnalysisPromiseListener> listener =
-        new ContentAnalysisPromiseListener(aResolver, contentAnalysisPromise);
+    RefPtr<ContentAnalysisAdditionalFilesPromiseListener> listener =
+        new ContentAnalysisAdditionalFilesPromiseListener(
+            aResolver, contentAnalysisPromise, std::move(aFilePaths), 1,
+            windowInner, std::move(documentURIStringCopy), contentAnalysis);
     contentAnalysisPromise->AppendNativeHandler(listener);
   } else {
     aResolver(contentanalysis::MaybeContentAnalysisResult(
