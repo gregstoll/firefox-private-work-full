@@ -84,6 +84,7 @@ class ContentAnalysis : public nsIContentAnalysis {
   virtual ~ContentAnalysis();
   nsresult EnsureContentAnalysisClient();
   nsresult RunAnalyzeRequestTask(RefPtr<nsIContentAnalysisRequest> aRequest,
+                                 bool aAcknowledgeResponse,
                                  RefPtr<mozilla::dom::Promise> aPromise);
 
   static StaticDataMutex<UniquePtr<content_analysis::sdk::Client>> sCaClient;
@@ -123,6 +124,22 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
   // ContentAnalysis (or, more precisely, it's Client object) must outlive
   // the transaction.
   RefPtr<ContentAnalysis> mOwner;
+};
+
+class ContentAnalysisAcknowledgement
+    : public nsIContentAnalysisAcknowledgement {
+ public:
+  NS_DECL_THREADSAFE_ISUPPORTS
+  NS_DECL_NSICONTENTANALYSISACKNOWLEDGEMENT
+
+  ContentAnalysisAcknowledgement(unsigned long aResult,
+                                 unsigned long aFinalAction);
+
+ private:
+  virtual ~ContentAnalysisAcknowledgement() = default;
+
+  unsigned long mResult;
+  unsigned long mFinalAction;
 };
 
 }  // namespace contentanalysis

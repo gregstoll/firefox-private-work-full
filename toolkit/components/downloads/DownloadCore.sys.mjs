@@ -2646,20 +2646,21 @@ DownloadCopySaver.prototype = {
       // TODO: A bug in JS means we have to assign this object and return it to avoid
       // "Warning: unreachable code after return statement"
       let ret = lazy.gContentAnalysis
-        .AnalyzeContentRequest({
-          analysisType: Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
-          resources,
-          url: download.source.url,
-          filePath: download.target.path,
-          sha256Digest: download.saver.getSha256Hash(),
-        })
+        .AnalyzeContentRequest(
+          {
+            analysisType: Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
+            resources,
+            url: download.source.url,
+            filePath: download.target.path,
+            sha256Digest: download.saver.getSha256Hash(),
+          },
+          true
+        )
         .then(response => {
-          let finalAction;
           let permissionVerdict;
           let shouldBlock = true;
           switch (response.action) {
             case Ci.nsIContentAnalysisResponse.ALLOW:
-              finalAction = Ci.nsIContentAnalysisAcknowledgement.ALLOW;
               permissionVerdict = "";
               shouldBlock = false;
               break;
@@ -2667,7 +2668,6 @@ DownloadCopySaver.prototype = {
               console.info(
                 `Report from content analysis for ${download.source.url}`
               );
-              finalAction = Ci.nsIContentAnalysisAcknowledgement.REPORT_ONLY;
               permissionVerdict = "";
               shouldBlock = false;
               break;
@@ -2675,26 +2675,15 @@ DownloadCopySaver.prototype = {
               console.warn(
                 `Warning from content analysis for ${download.source.url}`
               );
-              finalAction = Ci.nsIContentAnalysisAcknowledgement.WARN;
               permissionVerdict =
                 DownloadError.BLOCK_VERDICT_POTENTIALLY_UNWANTED;
               break;
             case Ci.nsIContentAnalysisResponse.BLOCK:
               permissionVerdict = DownloadError.BLOCK_VERDICT_MALWARE;
-              finalAction = Ci.nsIContentAnalysisAcknowledgement.BLOCK;
               break;
             default:
               // Internal error.  Block download and do not send acknowledge.
               throw new Error("Internal content analysis failure");
-          }
-
-          try {
-            response.Acknowledge({
-              result: Ci.nsIContentAnalysisAcknowledgement.SUCCESS,
-              finalAction,
-            });
-          } catch (ex) {
-            // The acknowledge response failed.  Ignore this.
           }
 
           return {
