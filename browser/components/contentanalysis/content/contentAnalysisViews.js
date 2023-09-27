@@ -212,6 +212,8 @@ var ContentAnalysisViews = {
                 Ci.nsIContentAnalysisRequest
                   .FILE_DOWNLOADED /* TODO fix this type */,
                 browserAndResourceName.resourceName,
+                browserAndResourceName.browser,
+                request.requestToken,
                 this.responseResultToAcknowledgementResult(responseResult)
               ),
             };
@@ -263,6 +265,8 @@ var ContentAnalysisViews = {
             notification: this._showCAResult(
               Ci.nsIContentAnalysisRequest.FILE_DOWNLOADED,
               aDownload.source.url /* TODO: Better name */,
+              undefined /* TODO - should be showing download-specific UI? */,
+              undefined /* TODO - should be showing download-specific UI? */,
               aDownload.contentAnalysis.result
             ),
           };
@@ -460,7 +464,7 @@ var ContentAnalysisViews = {
   /**
    * Show a message to the user to indicate the result of a CA request.
    */
-  _showCAResult(aOperation, aResourceName, aCAResult) {
+  _showCAResult(aOperation, aResourceName, aBrowser, aRequestToken, aCAResult) {
     // TODO: Better messages
     let message = null;
     let timeoutMs = 0;
@@ -474,9 +478,27 @@ var ContentAnalysisViews = {
         timeoutMs = this._RESULT_NOTIFICATION_FAST_TIMEOUT_MS;
         break;
       case Ci.nsIContentAnalysisAcknowledgement.WARN:
-        message = "CA responded with WARN for resource " + aResourceName;
-        timeoutMs = this._RESULT_NOTIFICATION_TIMEOUT_MS;
-        break;
+        const index = Services.prompt.confirmExBC(
+          aBrowser.browsingContext,
+          Ci.nsIPromptService.MODAL_TYPE_TAB,
+          this.l10n.formatValueSync("contentanalysis-warndialogtitle"),
+          this.l10n.formatValueSync("contentanalysis-warndialogtext", {
+            content: aResourceName,
+          }),
+          Ci.nsIPromptService.BUTTON_POS_0 *
+            Ci.nsIPromptService.BUTTON_TITLE_IS_STRING +
+            Ci.nsIPromptService.BUTTON_POS_1 *
+              Ci.nsIPromptService.BUTTON_TITLE_IS_STRING +
+            Ci.nsIPromptService.BUTTON_POS_1_DEFAULT,
+          "Allow",
+          "Deny",
+          null,
+          null,
+          {}
+        );
+        const allow = index === 0;
+        gContentAnalysis.RespondToWarnDialog(aRequestToken, allow);
+        return null;
       case Ci.nsIContentAnalysisAcknowledgement.BLOCK:
         message =
           "CA responded with BLOCK. Transfer denied for resource " +
