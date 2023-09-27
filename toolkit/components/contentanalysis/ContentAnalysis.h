@@ -69,6 +69,7 @@ class ContentAnalysisRequest : public nsIContentAnalysisRequest {
   nsString mOperationDisplayString;
 };
 
+class ContentAnalysisResponse;
 class ContentAnalysis : public nsIContentAnalysis {
  public:
   NS_DECL_THREADSAFE_ISUPPORTS
@@ -94,6 +95,28 @@ class ContentAnalysis : public nsIContentAnalysis {
 
   DataMutex<nsTHashMap<nsCString, nsMainThreadPtrHandle<dom::Promise>>>
       mPromiseMap;
+  class WarnResponseData {
+   public:
+    WarnResponseData(nsMainThreadPtrHandle<dom::Promise>&& aPromiseHolder,
+                     RefPtr<ContentAnalysisResponse>& aResponse,
+                     bool aAcknowledgeResponse)
+        : mPromiseHolder(aPromiseHolder),
+          mResponse(aResponse),
+          mAcknowledgeResponse(aAcknowledgeResponse) {}
+
+    void SwapPromiseHolder(
+        nsMainThreadPtrHandle<dom::Promise>& aPromiseHolder) {
+      std::swap(aPromiseHolder, mPromiseHolder);
+    }
+    RefPtr<ContentAnalysisResponse> GetResponse() { return mResponse; }
+    bool GetAcknowledgeResponse() { return mAcknowledgeResponse; }
+
+   private:
+    nsMainThreadPtrHandle<dom::Promise> mPromiseHolder;
+    RefPtr<ContentAnalysisResponse> mResponse;
+    bool mAcknowledgeResponse;
+  };
+  DataMutex<nsTHashMap<nsCString, WarnResponseData>> mWarnResponseDataMap;
 };
 
 class ContentAnalysisResponse : public nsIContentAnalysisResponse {
@@ -107,6 +130,7 @@ class ContentAnalysisResponse : public nsIContentAnalysisResponse {
       unsigned long aAction, const nsACString& aRequestToken);
 
   void SetOwner(RefPtr<ContentAnalysis> aOwner);
+  void ResolveWarnAction(bool aAllowContent);
 
  private:
   virtual ~ContentAnalysisResponse() = default;

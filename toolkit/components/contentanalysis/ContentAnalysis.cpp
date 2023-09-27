@@ -550,6 +550,11 @@ void ContentAnalysisResponse::SetOwner(RefPtr<ContentAnalysis> aOwner) {
   mOwner = aOwner;
 }
 
+void ContentAnalysisResponse::ResolveWarnAction(bool aAllowContent) {
+  MOZ_ASSERT(mAction == WARN);
+  mAction = aAllowContent ? ALLOW : BLOCK;
+}
+
 ContentAnalysisAcknowledgement::ContentAnalysisAcknowledgement(
     unsigned long aResult, unsigned long aFinalAction)
     : mResult(aResult), mFinalAction(aFinalAction) {}
@@ -573,7 +578,8 @@ NS_IMPL_ISUPPORTS(ContentAnalysisAcknowledgement,
 NS_IMPL_ISUPPORTS(ContentAnalysis, nsIContentAnalysis);
 
 ContentAnalysis::ContentAnalysis()
-    : mPromiseMap("ContentAnalysisRequest::mPendingPromiseMapMutex") {}
+    : mPromiseMap("ContentAnalysis::mPromiseMap"),
+      mWarnResponseDataMap("ContentAnalysis::mWarnPromiseMap") {}
 
 ContentAnalysis::~ContentAnalysis() {
   auto caClientRef = sCaClient.Lock();
@@ -702,13 +708,30 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                           }
                           return;
                         }
+                        uint32_t action;
+                        rv = response->GetAction(&action);
+                        MOZ_ASSERT(NS_SUCCEEDED(rv));
                         nsCOMPtr<nsIObserverService> obsServ =
                             mozilla::services::GetObserverService();
+                        if (action == nsIContentAnalysisResponse::WARN) {
+                          auto warnResponseDataMapRef =
+                              mWarnResponseDataMap.Lock();
+                          auto& warnResponseDataMap =
+                              warnResponseDataMapRef.ref();
+                          warnResponseDataMap.InsertOrUpdate(
+                              requestToken,
+                              WarnResponseData(std::move(promiseHolder),
+                                               response, aAcknowledgeResponse));
+                          obsServ->NotifyObservers(response, "dlp-response",
+                                                   nullptr);
+                          return;
+                        }
                         obsServ->NotifyObservers(response, "dlp-response",
                                                  nullptr);
                         if (aAcknowledgeResponse) {
                           uint32_t action;
                           rv = response->GetAction(&action);
+                          MOZ_ASSERT(NS_SUCCEEDED(rv));
                           RefPtr<ContentAnalysisAcknowledgement>
                               acknowledgement =
                                   new ContentAnalysisAcknowledgement(
@@ -816,6 +839,43 @@ ContentAnalysis::CancelContentAnalysisRequest(const nsACString& aRequestToken) {
         } else {
           LOGD("Content analysis request not found when trying to cancel %s",
                requestToken.get());
+        }
+      }));
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+ContentAnalysis::RespondToWarnDialog(const nsACString& aRequestToken,
+                                     bool aAllowContent) {
+  nsCString requestToken(aRequestToken);
+  RefPtr<ContentAnalysis> self = this;
+  NS_DispatchToMainThread(NS_NewRunnableFunction(
+      "RespondToWarnDialog", [self, aAllowContent, requestToken]() {
+        auto warnResponseDataMapRef = self->mWarnResponseDataMap.Lock();
+        auto& warnResponseDataMap = warnResponseDataMapRef.ref();
+        LOGD("Content analysis getting warn response %d for request %s",
+             aAllowContent ? 1 : 0, requestToken.get());
+        if (auto entry = warnResponseDataMap.Lookup(requestToken)) {
+          nsMainThreadPtrHandle<dom::Promise> promiseHolder;
+          entry.Data().SwapPromiseHolder(promiseHolder);
+          entry.Data().GetResponse()->ResolveWarnAction(aAllowContent);
+          if (entry.Data().GetAcknowledgeResponse()) {
+            uint32_t action;
+            nsresult rv = entry.Data().GetResponse()->GetAction(&action);
+            MOZ_ASSERT(NS_SUCCEEDED(rv));
+            RefPtr<ContentAnalysisAcknowledgement> acknowledgement =
+                new ContentAnalysisAcknowledgement(
+                    nsIContentAnalysisAcknowledgement::SUCCESS,
+                    ResponseResultToAcknowledgementResult(action));
+            entry.Data().GetResponse()->Acknowledge(acknowledgement);
+          }
+          promiseHolder.get()->MaybeResolve(entry.Data().GetResponse());
+          entry.Remove();
+        } else {
+          LOGD(
+              "Content analysis request not found when trying to send warn "
+              "response for request %s",
+              requestToken.get());
         }
       }));
   return NS_OK;

@@ -176,4 +176,10 @@ interface nsIContentAnalysis : nsISupports
    * was denied.
    */
   void CancelContentAnalysisRequest(in ACString aRequestToken);
+
+  /**
+   * Indicates that the user has responded to a WARN dialog. aAllowContent represents
+   * whether the user wants to allow the request to go through.
+   */
+  void RespondToWarnDialog(in ACString aRequestToken, in bool aAllowContent);
 };
