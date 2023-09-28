@@ -1009,6 +1009,9 @@ parent:
     async DoDragAndDropFilesContentAnalysis(nsString[] fileNames)
         returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
 
+    async DoDragAndDropTextContentAnalysis(nsString text)
+        returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
+
 /*
  * FIXME: write protocol!
 

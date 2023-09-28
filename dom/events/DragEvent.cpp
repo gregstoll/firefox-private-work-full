@@ -67,10 +67,63 @@ static ContentAnalysisPermissionResult CheckContentAnalysisPermission(
   RefPtr<const DataTransferItemList> itemList = aDataTransfer->Items();
 
   nsTArray<nsString> filePaths;
+  // These items are grouped together by Index() - every item with the same
+  // Index() is a different representation of the same underlying data.
+  // So we only need to check one of them.
+  Maybe<uint32_t> lastCheckedStringIndex = Nothing();
   for (uint32_t i = 0; i < itemList->Length(); ++i) {
     bool found;
     DataTransferItem* item = itemList->IndexedGetter(i, found);
-    if (item->Kind() == DataTransferItem::KIND_FILE) {
+    MOZ_ASSERT(found);
+    if (item->Kind() == DataTransferItem::KIND_STRING) {
+      // Skip mozilla-internal context around HTML
+      nsString type;
+      item->GetType(type);
+      if (type.EqualsASCII(kHTMLContext) || type.EqualsASCII(kHTMLInfo)) {
+        continue;
+      }
+      if (Some(item->Index()) == lastCheckedStringIndex) {
+        // Already checked a representation of this underlying data
+        continue;
+      }
+      ErrorResult errorResult;
+      nsCOMPtr<nsIVariant> data = item->Data(principal, errorResult);
+      if (errorResult.Failed()) {
+        NS_WARNING("Failed to get data from dragged KIND_STRING");
+        return Err(errorResult.StealNSResult());
+      }
+      if (!data) {
+        // due to principal?
+        continue;
+      }
+
+      nsAutoString stringData;
+      nsresult rv = data->GetAsAString(stringData);
+      NS_ENSURE_SUCCESS(rv, Err(rv));
+
+      Maybe<bool> result;
+      browserChild->SendDoDragAndDropTextContentAnalysis(stringData)
+          ->Then(
+              GetCurrentSerialEventTarget(), __func__,
+              /* resolve */
+              [&result](
+                  const contentanalysis::MaybeContentAnalysisResult& aResult) {
+                result = Some(aResult.ShouldAllowContent());
+              },
+              /* reject */
+              [&result](mozilla::ipc::ResponseRejectReason aReason) {
+                result = Some(false);
+              });
+
+      SpinEventLoopUntil("SendDoDragAndDropTextContentAnalysis"_ns,
+                         [&result]() -> bool { return result.isSome(); });
+
+      if (!(*result)) {
+        // Rejected by content analysis
+        return false;
+      }
+      lastCheckedStringIndex = Some(item->Index());
+    } else if (item->Kind() == DataTransferItem::KIND_FILE) {
       nsString path;
       ErrorResult errorResult;
       nsCOMPtr<nsIVariant> data = item->Data(principal, errorResult);
