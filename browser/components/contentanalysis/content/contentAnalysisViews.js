@@ -27,11 +27,15 @@ var ContentAnalysisViews = {
 
   _SHOW_DIALOGS: false,
 
-  _SLOW_DLP_NOTIFICATION_TIMEOUT_MS: 30 * 1000, // 30 sec
+  _SLOW_DLP_NOTIFICATION_TIMEOUT_MS: 5 * 1000, // 5 sec
 
   _RESULT_NOTIFICATION_TIMEOUT_MS: 5 * 60 * 1000, // 5 min
 
   _RESULT_NOTIFICATION_FAST_TIMEOUT_MS: 60 * 1000, // 1 min
+
+  _CA_SILENCE_NOTIFICATIONS: "browser.contentanalysis.silent_notifications",
+
+  haveCleanedUp: false,
 
   /**
    * Registers for various messages/events that will indicate the
@@ -42,7 +46,7 @@ var ContentAnalysisViews = {
   },
 
   /**
-   * Register for file download CA events.
+   * Register UI for file download CA events.
    */
   async initializeDownloadCA() {
     let downloadsView = {
@@ -64,16 +68,19 @@ var ContentAnalysisViews = {
       observe: async (aSubj, aTopic, aData) => {
         switch (aTopic) {
           case "quit-application-requested":
-            let allDownloads = await (
-              await Downloads.getList(Downloads.ALL)
-            ).getAll();
-            for (var download of allDownloads) {
-              this._clearDownloadViews(download);
+            if (!ContentAnalysisViews.haveCleanedUp) {
+              ContentAnalysisViews.haveCleanedUp = true;
+              let allDownloads = await (
+                await Downloads.getList(Downloads.ALL)
+              ).getAll();
+              for (var download of allDownloads) {
+                downloadsView._clearDownloadViews(download);
+              }
+              Services.obs.removeObserver(
+                downloadsView,
+                "quit-application-requested"
+              );
             }
-            Services.obs.removeObserver(
-              downloadsView,
-              "quit-application-requested"
-            );
         }
       },
 
@@ -86,12 +93,10 @@ var ContentAnalysisViews = {
           return;
         }
 
-        const SLOW_TIMEOUT_MS = 3000; // 3 sec
-
         // On contentAnalysis.RUNNING, start timer that, when it expires,
         // presents a "slow CA check" message.
         if (
-          aDownload.contentAnalysis.state ==
+          aDownload.contentAnalysis.state ===
             aDownload.contentAnalysis.RUNNING &&
           !aDownload.contentAnalysis.hasOwnProperty("busyView")
         ) {
@@ -103,7 +108,7 @@ var ContentAnalysisViews = {
                   aDownload.source.url
                 ),
               };
-            }, SLOW_TIMEOUT_MS),
+            }, this._SLOW_DLP_NOTIFICATION_TIMEOUT_MS),
           };
           return;
         }
@@ -111,7 +116,7 @@ var ContentAnalysisViews = {
         // On ContentAnalysis.FINISHED, cancels timer or slow message UI,
         // if present, and possibly presents the CA verdict.
         if (
-          aDownload.contentAnalysis.state ==
+          aDownload.contentAnalysis.state ===
             aDownload.contentAnalysis.FINISHED &&
           !aDownload.contentAnalysis.hasOwnProperty("resultView")
         ) {
@@ -131,12 +136,37 @@ var ContentAnalysisViews = {
           return;
         }
 
-        this._clearDownloadViews(aDownload);
+        downloadsView._clearDownloadViews(aDownload);
+      },
+
+      _clearDownloadViews(aDownload) {
+        // Cancels "slow operation" timer for the download, or any
+        // result notifications, if they exist.
+        if ("busyView" in aDownload.contentAnalysis) {
+          this._disconnectFromView(aDownload.contentAnalysis.busyView);
+          delete aDownload.contentAnalysis.busyView;
+        }
+
+        if ("resultView" in aDownload.contentAnalysis) {
+          this._disconnectFromView(aDownload.contentAnalysis.resultView);
+          delete aDownload.contentAnalysis.resultView;
+        }
       },
     };
 
     Services.obs.addObserver(downloadsView, "quit-application-requested");
-    await (await Downloads.getList(Downloads.ALL)).addView(downloadsView);
+    let downloadList = await Downloads.getList(Downloads.ALL);
+    await downloadList.addView(downloadsView);
+    window.addEventListener("unload", async () => {
+      if (!ContentAnalysisViews.haveCleanedUp) {
+        ContentAnalysisViews.haveCleanedUp = true;
+        Services.obs.removeObserver(
+          downloadsView,
+          "quit-application-requested"
+        );
+        await downloadList.removeView(downloadsView);
+      }
+    });
   },
 
   _clearDownloadViews(aDownload) {
@@ -150,16 +180,12 @@ var ContentAnalysisViews = {
   },
 
   _disconnectFromView(caView) {
-    // Cancels "slow operation" timer for the download, or any
-    // notifications for it, if it exists.
     if (!caView) {
       return;
     }
     if ("timer" in caView) {
-      // console.log('removing TIMER');
       clearTimeout(caView.timer);
     } else if ("notification" in caView) {
-      // console.log('removing NOTIFICATION');
       caView.notification.close();
     }
   },
@@ -172,6 +198,7 @@ var ContentAnalysisViews = {
     if (this._SHOW_NOTIFICATIONS) {
       const notification = new Notification("Content Analysis", {
         body: aMessage,
+        silent: Services.prefs.getBoolPref(this._CA_SILENCE_NOTIFICATIONS),
       });
 
       if (aTimeout != 0) {
