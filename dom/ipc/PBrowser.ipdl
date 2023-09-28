@@ -1006,6 +1006,9 @@ parent:
     async DoClipboardContentAnalysis(IPCTransferableData data)
         returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
 
+    async DoDragAndDropFilesContentAnalysis(nsString[] fileNames)
+        returns (MaybeContentAnalysisResult nsIContentAnalysisResponseValue);
+
 /*
  * FIXME: write protocol!
 

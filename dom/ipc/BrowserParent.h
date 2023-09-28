@@ -756,6 +756,10 @@ class BrowserParent final : public PBrowserParent,
       const IPCTransferableData& aData,
       DoClipboardContentAnalysisResolver&& aResolver);
 
+  mozilla::ipc::IPCResult RecvDoDragAndDropFilesContentAnalysis(
+      nsTArray<nsString>&& aFilePaths,
+      DoDragAndDropFilesContentAnalysisResolver&& aResolver);
+
  private:
   void SuppressDisplayport(bool aEnabled);
 
