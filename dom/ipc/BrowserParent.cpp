@@ -16,6 +16,8 @@
 #  include "nsAccessibilityService.h"
 #endif
 #include "mozilla/Components.h"
+#include "ContentAnalysis.h"
+#include "mozilla/contentanalysis/ContentAnalysisIPCTypes.h"
 #include "mozilla/dom/BrowserHost.h"
 #include "mozilla/dom/BrowserSessionStore.h"
 #include "mozilla/dom/BrowsingContextGroup.h"
@@ -81,6 +83,7 @@
 #include "nsIInterfaceRequestorUtils.h"
 #include "nsILoadInfo.h"
 #include "nsIPromptFactory.h"
+#include "nsISupportsPrimitives.h"
 #include "nsIURI.h"
 #include "nsIWebBrowserChrome.h"
 #include "nsIWebProtocolHandlerRegistrar.h"
@@ -136,6 +139,8 @@
 #include "nsIXULRuntime.h"
 #include "VsyncSource.h"
 #include "nsSubDocumentFrame.h"
+#include "ScopedNSSTypes.h"
+#include "GMPUtils.h"  // ToHexString
 
 #ifdef XP_WIN
 #  include "FxRWindowManager.h"
@@ -4091,6 +4096,213 @@ mozilla::ipc::IPCResult BrowserParent::RecvShowDynamicToolbar() {
 
   window->ShowDynamicToolbar();
 #endif  // defined(MOZ_WIDGET_ANDROID)
+  return IPC_OK();
+}
+
+namespace {
+
+class ContentAnalysisPromiseListener
+    : public mozilla::dom::PromiseNativeHandler {
+  NS_DECL_ISUPPORTS
+
+  ContentAnalysisPromiseListener(
+      std::function<void(const IPC::MaybeContentAnalysisResult&)>&& aResolver,
+      mozilla::dom::Promise* aContentAnalysisPromise)
+      : mResolver(aResolver),
+        mContentAnalysisPromise(aContentAnalysisPromise) {}
+  virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    if (aValue.isObject()) {
+      auto* obj = aValue.toObjectOrNull();
+      JS::Handle<JSObject*> handle =
+          JS::Handle<JSObject*>::fromMarkedLocation(&obj);
+      JS::Rooted<JS::Value> actionValue(aCx);
+      if (JS_GetProperty(aCx, handle, "action", &actionValue)) {
+        if (actionValue.isNumber()) {
+          double actionNumber = actionValue.toNumber();
+          mResolver(contentanalysis::MaybeContentAnalysisResult(
+              static_cast<int32_t>(actionNumber)));
+          mContentAnalysisPromise->Release();
+          return;
+        }
+      }
+    }
+    mResolver(contentanalysis::MaybeContentAnalysisResult(
+        contentanalysis::NoContentAnalysisResult::ERROR_INVALID_JSON_RESPONSE));
+    mContentAnalysisPromise->Release();
+  }
+
+  virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // call to content analysis failed
+    mResolver(contentanalysis::MaybeContentAnalysisResult(
+        contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    mContentAnalysisPromise->Release();
+  }
+
+ private:
+  ~ContentAnalysisPromiseListener() = default;
+  std::function<void(const IPC::MaybeContentAnalysisResult&)> mResolver;
+  mozilla::dom::Promise* mContentAnalysisPromise;
+};
+
+NS_IMPL_ISUPPORTS0(ContentAnalysisPromiseListener)
+
+static nsresult GetFileDigest(const nsString& filePath,
+                              nsCString& digestString) {
+  nsresult rv;
+  mozilla::Digest digest;
+  digest.Begin(SEC_OID_SHA256);
+  PRFileDesc* fd = nullptr;
+  nsCOMPtr<nsIFile> file = do_CreateInstance("@mozilla.org/file/local;1", &rv);
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = file->InitWithPath(filePath);
+  NS_ENSURE_SUCCESS(rv, rv);
+  rv = file->OpenNSPRFileDesc(PR_RDONLY | nsIFile::OS_READAHEAD, 0, &fd);
+  NS_ENSURE_SUCCESS(rv, rv);
+  auto closeFile = MakeScopeExit([fd]() { PR_Close(fd); });
+  uint8_t buffer[4096];
+  PRInt32 bytesRead;
+  bytesRead = PR_Read(fd, buffer, sizeof(buffer) / sizeof(uint8_t));
+  while (bytesRead != 0) {
+    if (bytesRead == -1) {
+      return NS_ERROR_DOM_FILE_NOT_READABLE_ERR;
+    }
+    digest.Update(mozilla::Span<const uint8_t>(buffer, bytesRead));
+    bytesRead = PR_Read(fd, buffer, sizeof(buffer) / sizeof(uint8_t));
+  }
+  nsTArray<uint8_t> digestResults;
+  rv = digest.End(digestResults);
+  NS_ENSURE_SUCCESS(rv, rv);
+  digestString = mozilla::ToHexString(digestResults);
+  return NS_OK;
+}
+
+}  // namespace
+
+mozilla::ipc::IPCResult BrowserParent::RecvDoClipboardContentAnalysis(
+    const IPCTransferableData& aData,
+    DoClipboardContentAnalysisResolver&& aResolver) {
+  nsresult rv;
+  mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+  nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+      mozilla::components::nsIContentAnalysis::Service(&rv);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+
+  bool contentAnalysisIsActive = false;
+  rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        mozilla::contentanalysis::NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+  if (MOZ_LIKELY(!contentAnalysisIsActive)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        mozilla::contentanalysis::NoContentAnalysisResult::AGENT_NOT_PRESENT));
+    return IPC_OK();
+  }
+
+  mozilla::dom::AutoEntryScript aes(
+      nsGlobalWindowInner::Cast(
+          GetOwnerElement()->OwnerDoc()->GetInnerWindow()),
+      "content analysis on clipboard copy");
+  RefPtr<nsIURI> currentURI = GetBrowsingContext()->GetCurrentURI();
+
+  nsAutoCString documentURICString;
+  rv = currentURI->GetSpec(documentURICString);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        mozilla::contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+
+  nsString documentURIString = NS_ConvertUTF8toUTF16(documentURICString);
+
+  nsCOMPtr<nsITransferable> trans =
+      do_CreateInstance("@mozilla.org/widget/transferable;1", &rv);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        mozilla::contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+
+  trans->Init(nullptr);
+
+  rv = nsContentUtils::IPCTransferableDataToTransferable(aData, false, trans,
+                                                         false);
+  if (NS_FAILED(rv)) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        mozilla::contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+    return IPC_OK();
+  }
+  nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest;
+  nsCOMPtr<nsISupports> transferData;
+  rv = trans->GetTransferData(kTextMime, getter_AddRefs(transferData));
+  if (NS_SUCCEEDED(rv)) {
+    nsCOMPtr<nsISupportsString> textData = do_QueryInterface(transferData);
+    nsString text;
+    if (MOZ_LIKELY(textData)) {
+      rv = textData->GetData(text);
+      if (NS_FAILED(rv)) {
+        aResolver(contentanalysis::MaybeContentAnalysisResult(
+            mozilla::contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+        return IPC_OK();
+      }
+    }
+
+    nsCString emptyDigest;
+    contentAnalysisRequest =
+        new mozilla::contentanalysis::ContentAnalysisRequest(
+            nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text), false,
+            std::move(emptyDigest), std::move(documentURIString));
+  } else {
+    rv = trans->GetTransferData(kFileMime, getter_AddRefs(transferData));
+    if (NS_SUCCEEDED(rv)) {
+      nsCOMPtr<mozilla::dom::BlobImpl> blob = do_QueryInterface(transferData);
+      if (blob) {
+        nsString filePath;
+        ErrorResult result;
+        blob->GetMozFullPathInternal(filePath, result);
+        if (NS_WARN_IF(result.Failed())) {
+          rv = result.StealNSResult();
+        } else {
+          nsCString digestString;
+          if (NS_FAILED(GetFileDigest(filePath, digestString))) {
+            aResolver(contentanalysis::MaybeContentAnalysisResult(
+                mozilla::contentanalysis::NoContentAnalysisResult::
+                    ERROR_OTHER));
+            return IPC_OK();
+          }
+          contentAnalysisRequest =
+              new mozilla::contentanalysis::ContentAnalysisRequest(
+                  nsIContentAnalysisRequest::BULK_DATA_ENTRY,
+                  std::move(filePath), true, std::move(digestString),
+                  std::move(documentURIString));
+        }
+      }
+    }
+  }
+  if (!contentAnalysisRequest) {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        mozilla::contentanalysis::NoContentAnalysisResult::
+            ERROR_COULD_NOT_GET_DATA));
+    return IPC_OK();
+  }
+  rv = contentAnalysis->AnalyzeContentRequest(contentAnalysisRequest, aes.cx(),
+                                              &contentAnalysisPromise);
+  if (NS_SUCCEEDED(rv)) {
+    RefPtr<ContentAnalysisPromiseListener> listener =
+        new ContentAnalysisPromiseListener(std::move(aResolver),
+                                           contentAnalysisPromise);
+    contentAnalysisPromise->AppendNativeHandler(listener);
+  } else {
+    aResolver(contentanalysis::MaybeContentAnalysisResult(
+        contentanalysis::NoContentAnalysisResult::ERROR_OTHER));
+  }
   return IPC_OK();
 }
 
