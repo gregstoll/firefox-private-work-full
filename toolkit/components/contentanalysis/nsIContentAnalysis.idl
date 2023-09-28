@@ -47,6 +47,9 @@ interface nsIContentAnalysisResponse : nsISupports
 
   readonly attribute unsigned long action;
 
+  // Identifier for the corresponding nsIContentAnalysisRequest
+  readonly attribute ACString requestToken;
+
   /**
    * Acknowledge receipt of an analysis response.
    * Should always be called after successful resolution of the promise
@@ -103,6 +106,13 @@ interface nsIContentAnalysisRequest : nsISupports
 
   readonly attribute unsigned long analysisType;
 
+  // Enumeration of what operation is happening, to be displayed to the user
+  const unsigned long OPERATION_CUSTOMDISPLAYSTRING = 0;
+  const unsigned long OPERATION_CLIPBOARD = 1;
+  const unsigned long OPERATION_DROPPEDTEXT = 2;
+  readonly attribute unsigned long operationTypeForDisplay;
+  readonly attribute AString operationDisplayString;
+
   // Text content to analyze.  Only one of textContent or filePath is defined.
   readonly attribute AString textContent;
 
@@ -121,6 +131,9 @@ interface nsIContentAnalysisRequest : nsISupports
 
   // Email address of user.
   readonly attribute AString email;
+
+  // Unique identifier for this request
+  readonly attribute ACString requestToken;
 };
 
 [scriptable, builtinclass, uuid(61497587-2bba-4a88-acd3-3fbb2cedf163)]
