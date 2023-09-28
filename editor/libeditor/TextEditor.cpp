@@ -16,6 +16,7 @@
 #include "PlaceholderTransaction.h"
 #include "gfxFontUtils.h"
 
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/DocumentInlines.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/ContentIterator.h"
@@ -38,6 +39,7 @@
 #include "nsCRT.h"
 #include "nsCaret.h"
 #include "nsCharTraits.h"
+#include "nsClipboardProxy.h"
 #include "nsComponentManagerUtils.h"
 #include "nsContentCID.h"
 #include "nsContentList.h"
@@ -599,7 +601,15 @@ nsresult TextEditor::HandlePasteAsQuotation(
   }
 
   // Get the Data from the clipboard
-  clipboard->GetData(trans, aClipboardType);
+  auto* browserChild = BrowserChild::GetFrom(GetDocument()->GetDocShell());
+  nsIClipboardProxy* clipboardProxy =
+      nsClipboardProxy::FromClipboard(*clipboard);
+  if (browserChild && clipboardProxy) {
+    rv = clipboardProxy->GetDataWithBrowserCheck(trans, aClipboardType,
+                                                 browserChild);
+  } else {
+    rv = clipboard->GetData(trans, aClipboardType);
+  }
 
   // Now we ask the transferable for the data
   // it still owns the data, we just have a pointer to it.

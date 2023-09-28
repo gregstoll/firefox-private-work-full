@@ -150,6 +150,11 @@ nsBaseClipboard::nsBaseClipboard(const ClipboardCapabilities& aClipboardCaps)
 
 NS_IMPL_ISUPPORTS_INHERITED0(nsBaseClipboard, ClipboardSetDataHelper)
 
+NS_IMETHODIMP nsBaseClipboard::GetIsProxy(bool* aIsProxy) {
+  *aIsProxy = false;
+  return NS_OK;
+}
+
 /**
  * Sets the transferable object
  *

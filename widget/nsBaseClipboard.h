@@ -103,6 +103,7 @@ class nsBaseClipboard : public ClipboardSetDataHelper {
   NS_DECL_ISUPPORTS_INHERITED
 
   // nsIClipboard
+  NS_IMETHOD GetIsProxy(bool* aIsProxy) override;
   NS_IMETHOD SetData(nsITransferable* aTransferable, nsIClipboardOwner* anOwner,
                      int32_t aWhichClipboard) override final;
   NS_IMETHOD GetData(nsITransferable* aTransferable,

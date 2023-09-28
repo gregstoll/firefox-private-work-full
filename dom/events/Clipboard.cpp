@@ -14,6 +14,7 @@
 #include "mozilla/Result.h"
 #include "mozilla/ResultVariant.h"
 #include "mozilla/dom/BlobBinding.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/ClipboardItem.h"
 #include "mozilla/dom/ClipboardBinding.h"
 #include "mozilla/dom/ContentChild.h"
@@ -27,6 +28,7 @@
 #include "imgIContainer.h"
 #include "imgITools.h"
 #include "nsArrayUtils.h"
+#include "nsClipboardProxy.h"
 #include "nsComponentManagerUtils.h"
 #include "nsContentUtils.h"
 #include "nsIClipboard.h"
@@ -150,29 +152,44 @@ void Clipboard::ReadRequest::Answer() {
 
       trans->Init(nullptr);
       trans->AddDataFlavor(kTextMime);
-      clipboardService->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
-          ->Then(
-              GetMainThreadSerialEventTarget(), __func__,
-              /* resolve */
-              [trans, p]() {
-                nsCOMPtr<nsISupports> data;
-                nsresult rv =
-                    trans->GetTransferData(kTextMime, getter_AddRefs(data));
 
-                nsAutoString str;
-                if (!NS_WARN_IF(NS_FAILED(rv))) {
-                  nsCOMPtr<nsISupportsString> supportsstr =
-                      do_QueryInterface(data);
-                  MOZ_ASSERT(supportsstr);
-                  if (supportsstr) {
-                    supportsstr->GetData(str);
-                  }
-                }
+      auto* browserChild =
+          BrowserChild::GetFrom(owner->GetDoc()->GetDocShell());
+      auto resolvedCallback = [trans, p]() {
+        nsCOMPtr<nsISupports> data;
+        nsresult rv = trans->GetTransferData(kTextMime, getter_AddRefs(data));
 
-                p->MaybeResolve(str);
-              },
-              /* reject */
-              [p](nsresult rv) { p->MaybeReject(rv); });
+        nsAutoString str;
+        if (!NS_WARN_IF(NS_FAILED(rv))) {
+          nsCOMPtr<nsISupportsString> supportsstr = do_QueryInterface(data);
+          MOZ_ASSERT(supportsstr);
+          if (supportsstr) {
+            supportsstr->GetData(str);
+          }
+        }
+
+        p->MaybeResolve(str);
+      };
+
+      nsIClipboardProxy* clipboardProxy =
+          nsClipboardProxy::FromClipboard(*clipboardService);
+      if (browserChild && clipboardProxy) {
+        clipboardProxy
+            ->AsyncGetDataWithBrowserCheck(
+                trans, nsIClipboard::kGlobalClipboard, browserChild)
+            ->Then(GetMainThreadSerialEventTarget(), __func__,
+                   /* resolve */
+                   std::move(resolvedCallback),
+                   /* reject */
+                   [p](nsresult rv) { p->MaybeReject(rv); });
+      } else {
+        clipboardService->AsyncGetData(trans, nsIClipboard::kGlobalClipboard)
+            ->Then(GetMainThreadSerialEventTarget(), __func__,
+                   /* resolve */
+                   std::move(resolvedCallback),
+                   /* reject */
+                   [p](nsresult rv) { p->MaybeReject(rv); });
+      }
       break;
     }
     default: {

@@ -13,6 +13,7 @@
 #include "mozilla/EventForwards.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/dom/BlobImpl.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/DataTransferItemBinding.h"
 #include "mozilla/dom/Directory.h"
 #include "mozilla/dom/Event.h"
@@ -21,7 +22,9 @@
 #include "mozilla/dom/FileSystemFileEntry.h"
 #include "imgIContainer.h"
 #include "imgITools.h"
+#include "nsClipboardProxy.h"
 #include "nsComponentManagerUtils.h"
+#include "nsGlobalWindowInner.h"
 #include "nsIClipboard.h"
 #include "nsIFile.h"
 #include "nsIInputStream.h"
@@ -173,9 +176,27 @@ void DataTransferItem::FillInExternalData() {
         return;
       }
 
-      nsresult rv = clipboard->GetData(trans, mDataTransfer->ClipboardType());
-      if (NS_WARN_IF(NS_FAILED(rv))) {
-        return;
+      nsIClipboardProxy* clipboardProxy =
+          nsClipboardProxy::FromClipboard(*clipboard);
+      nsCOMPtr<nsIGlobalObject> global = GetGlobalFromDataTransfer();
+      nsGlobalWindowInner* inner =
+          nsGlobalWindowInner::Cast(global->GetAsInnerWindow());
+      MOZ_ASSERT(inner);
+
+      if (inner) {
+        auto* browserChild =
+            BrowserChild::GetFrom(inner->GetDocument()->GetDocShell());
+        nsresult rv;
+        if (browserChild && clipboardProxy) {
+          rv = clipboardProxy->GetDataWithBrowserCheck(
+              trans, mDataTransfer->ClipboardType(), browserChild);
+        } else {
+          rv = clipboard->GetData(trans, mDataTransfer->ClipboardType());
+        }
+
+        if (NS_WARN_IF(NS_FAILED(rv))) {
+          return;
+        }
       }
     } else {
       nsCOMPtr<nsIDragSession> dragSession = nsContentUtils::GetDragSession();

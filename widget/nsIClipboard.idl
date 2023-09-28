@@ -68,6 +68,8 @@ interface nsIClipboard : nsISupports
     static const uint32_t kClipboardTypeCount = kSelectionCache + 1;
 %}
 
+    readonly attribute bool isProxy;
+
    /**
     * Given a transferable, set the data on the native clipboard
     *

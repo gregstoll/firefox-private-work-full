@@ -25,6 +25,18 @@ class nsIClipboardProxy : public nsIClipboard {
   NS_DECLARE_STATIC_IID_ACCESSOR(NS_CLIPBOARDPROXY_IID)
 
   virtual void SetCapabilities(const ClipboardCapabilities& aClipboardCaps) = 0;
+
+  // Like GetData but allows for consultation with content analysis via
+  // BrowserChild.
+  virtual nsresult GetDataWithBrowserCheck(
+      nsITransferable* aTransferable, int32_t aWhichClipboard,
+      mozilla::dom::BrowserChild* aBrowserChild) = 0;
+
+  // Like AsyncGetData but allows for consultation with content analysis via
+  // BrowserChild.
+  virtual RefPtr<mozilla::GenericPromise> AsyncGetDataWithBrowserCheck(
+      nsITransferable* aTransferable, int32_t aWhichClipboard,
+      mozilla::dom::BrowserChild* aBrowserChild) = 0;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(nsIClipboardProxy, NS_CLIPBOARDPROXY_IID)
@@ -36,8 +48,22 @@ class nsClipboardProxy final : public nsIClipboardProxy {
 
   nsClipboardProxy();
 
+  static nsIClipboardProxy* FromClipboard(nsIClipboard& clipboard) {
+    bool isProxy = false;
+    MOZ_ASSERT(NS_SUCCEEDED(clipboard.GetIsProxy(&isProxy)));
+    return isProxy ? static_cast<nsIClipboardProxy*>(&clipboard) : nullptr;
+  }
+
   virtual void SetCapabilities(
       const ClipboardCapabilities& aClipboardCaps) override;
+
+  nsresult GetDataWithBrowserCheck(
+      nsITransferable* aTransferable, int32_t aWhichClipboard,
+      mozilla::dom::BrowserChild* aBrowserChild) override;
+
+  RefPtr<mozilla::GenericPromise> AsyncGetDataWithBrowserCheck(
+      nsITransferable* aTransferable, int32_t aWhichClipboard,
+      mozilla::dom::BrowserChild* aBrowserChild) override;
 
  private:
   ~nsClipboardProxy() = default;
