@@ -362,6 +362,27 @@ nsFilePicker::GetFile(nsIFile** aFile) {
   return NS_OK;
 }
 
+NS_IMETHODIMP nsFilePicker::RemoveFile(nsIFile* aFile) {
+  if (!mUnicodeFile.IsEmpty()) {
+    nsCOMPtr<nsIFile> file;
+    nsresult rv = GetFile(getter_AddRefs(file));
+    if (!file) return rv;
+    bool equal = false;
+    rv = aFile->Equals(file, &equal);
+    if (NS_FAILED(rv)) {
+      return rv;
+    }
+    if (!equal) {
+      return NS_ERROR_FILE_NOT_FOUND;
+    }
+    mUnicodeFile.SetLength(0);
+    return NS_OK;
+  }
+
+  // TODO - handle mFiles case
+  return NS_ERROR_FILE_NOT_FOUND;
+}
+
 NS_IMETHODIMP
 nsFilePicker::GetFileURL(nsIURI** aFileURL) {
   *aFileURL = nullptr;
