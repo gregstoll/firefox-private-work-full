@@ -11,6 +11,8 @@
 #include "nsIContentAnalysis.h"
 #include "nsProxyRelease.h"
 #include "nsString.h"
+#include "nsProxyRelease.h"
+#include "nsTHashMap.h"
 
 #include <string>
 
@@ -76,7 +78,7 @@ class ContentAnalysis : public nsIContentAnalysis {
       nsIContentAnalysisAcknowledgement* aAcknowledgement,
       const nsCString& aRequestToken);
 
-  ContentAnalysis() = default;
+  ContentAnalysis();
 
  private:
   virtual ~ContentAnalysis();
@@ -85,6 +87,12 @@ class ContentAnalysis : public nsIContentAnalysis {
                                  RefPtr<mozilla::dom::Promise> aPromise);
 
   static StaticDataMutex<UniquePtr<content_analysis::sdk::Client>> sCaClient;
+  // Whether sCaClient has been created. This is convenient for checking
+  // this without having to acquire the sCaClient mutex.
+  static std::atomic<bool> sCaClientCreated;
+
+  DataMutex<nsTHashMap<nsCString, nsMainThreadPtrHandle<dom::Promise>>>
+      mPromiseMap;
 };
 
 class ContentAnalysisResponse : public nsIContentAnalysisResponse {

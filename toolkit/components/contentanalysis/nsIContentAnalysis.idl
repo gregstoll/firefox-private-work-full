@@ -44,6 +44,7 @@ interface nsIContentAnalysisResponse : nsISupports
 
   // Values that do not appear in analysis.proto
   const unsigned long ALLOW = 1000;
+  const unsigned long CANCELED = 1001;
 
   readonly attribute unsigned long action;
 
@@ -168,4 +169,11 @@ interface nsIContentAnalysis : nsISupports
    */
   [implicit_jscontext]
   Promise AnalyzeContentRequest(in nsIContentAnalysisRequest aCar);
+
+  /**
+   * Cancels the request that is in progress. This may not actually cancel the request
+   * with the analysis server, but it means that Firefox will immediately act like the request
+   * was denied.
+   */
+  void CancelContentAnalysisRequest(in ACString aRequestToken);
 };
