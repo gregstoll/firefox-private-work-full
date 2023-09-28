@@ -5,16 +5,22 @@
 
 #include "TextEditor.h"
 
+#include "ContentAnalysis.h"
 #include "EditorUtils.h"
 #include "HTMLEditor.h"
 #include "SelectionState.h"
 
 #include "mozilla/ArrayUtils.h"
+#include "mozilla/Components.h"
 #include "mozilla/MouseEvents.h"
+#include "mozilla/SpinEventLoopUntil.h"
 #include "mozilla/dom/BrowserChild.h"
+#include "mozilla/dom/BrowsingContextGroup.h"
 #include "mozilla/dom/DataTransfer.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/DocumentInlines.h"
+#include "mozilla/dom/HTMLInputElement.h"
+#include "mozilla/dom/PromiseNativeHandler.h"
 #include "mozilla/dom/Selection.h"
 
 #include "nsAString.h"
@@ -162,6 +168,53 @@ nsresult TextEditor::InsertDroppedDataTransferAsAction(
   return rv;
 }
 
+void GetRequestingUrlFromDocument(EditorBase::Document* document,
+                                  nsString& requestingUrl) {
+  dom::Element* requestingUrlElement =
+      document->GetElementById(u"requestingUrl"_ns);
+  if (requestingUrlElement) {
+    dom::HTMLInputElement* requestingUrlInputElement =
+        dom::HTMLInputElement::FromNode(requestingUrlElement);
+    if (requestingUrlInputElement) {
+      requestingUrlInputElement->GetValue(requestingUrl,
+                                          nsINode::CallerType::System);
+    }
+  }
+}
+
+namespace {
+class ContentAnalysisPromiseListener
+    : public mozilla::dom::PromiseNativeHandler {
+  NS_DECL_ISUPPORTS
+
+  ContentAnalysisPromiseListener(Maybe<bool>* aShouldAllowContent,
+                                 mozilla::dom::Promise* aContentAnalysisPromise)
+      : mShouldAllowContent(aShouldAllowContent),
+        mContentAnalysisPromise(aContentAnalysisPromise) {}
+  virtual void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    contentanalysis::MaybeContentAnalysisResult result =
+        contentanalysis::MaybeContentAnalysisResult::FromJSONResponse(aValue,
+                                                                      aCx);
+    *mShouldAllowContent = Some(result.ShouldAllowContent());
+    mContentAnalysisPromise->Release();
+  }
+
+  virtual void RejectedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
+                                mozilla::ErrorResult& aRv) override {
+    // call to content analysis failed
+    *mShouldAllowContent = Some(false);
+    mContentAnalysisPromise->Release();
+  }
+
+ private:
+  ~ContentAnalysisPromiseListener() = default;
+  Maybe<bool>* mShouldAllowContent;
+  mozilla::dom::Promise* mContentAnalysisPromise;
+};
+NS_IMPL_ISUPPORTS0(ContentAnalysisPromiseListener)
+}  // namespace
+
 nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
                                  int32_t aClipboardType) {
   if (NS_WARN_IF(!GetDocument())) {
@@ -202,7 +255,92 @@ nsresult TextEditor::HandlePaste(AutoEditActionDataSetter& aEditActionData,
     rv = clipboardProxy->GetDataWithBrowserCheck(transferable, aClipboardType,
                                                  browserChild);
   } else {
-    rv = clipboard->GetData(transferable, aClipboardType);
+    nsString url;
+    rv = GetDocument()->GetURL(url);
+    if (NS_FAILED(rv)) {
+      NS_WARNING("Failed to get URL for document");
+      return rv;
+    }
+    bool didContentAnalysis = false;
+    if (url.Equals(u"chrome://global/content/commonDialog.xhtml")) {
+      // This could be a prompt() dialog, may need to do content analysis here
+      nsString requestingUrl;
+      GetRequestingUrlFromDocument(GetDocument(), requestingUrl);
+      if (!requestingUrl.IsEmpty()) {
+        mozilla::dom::Promise* contentAnalysisPromise = nullptr;
+        nsCOMPtr<nsIContentAnalysis> contentAnalysis =
+            mozilla::components::nsIContentAnalysis::Service(&rv);
+        if (NS_FAILED(rv)) {
+          NS_WARNING("Failed to get nsIContentAnalysis service");
+          return rv;
+        }
+
+        bool contentAnalysisIsActive = false;
+        rv = contentAnalysis->GetIsActive(&contentAnalysisIsActive);
+        if (NS_FAILED(rv)) {
+          NS_WARNING("Failed to get whether content analysis is active");
+          return rv;
+        }
+        if (MOZ_UNLIKELY(contentAnalysisIsActive)) {
+          mozilla::dom::AutoEntryScript aes(
+              nsGlobalWindowInner::Cast(GetDocument()->GetInnerWindow()),
+              "content analysis on clipboard copy");
+
+          rv = clipboard->GetData(transferable, aClipboardType);
+          if (NS_FAILED(rv)) {
+            NS_WARNING("nsIClipboard::GetData() failed, but ignored");
+            return NS_OK;  // XXX Why?
+          }
+
+          nsCOMPtr<nsISupports> transferData;
+          rv = transferable->GetTransferData(kTextMime,
+                                             getter_AddRefs(transferData));
+          if (NS_SUCCEEDED(rv)) {
+            nsCOMPtr<nsISupportsString> textData =
+                do_QueryInterface(transferData);
+            nsString text;
+            if (MOZ_LIKELY(textData)) {
+              rv = textData->GetData(text);
+              if (NS_FAILED(rv)) {
+                NS_WARNING("Failed to get text from clipboard");
+                return rv;
+              }
+            }
+
+            nsCString emptyDigest;
+            nsCOMPtr<nsIContentAnalysisRequest> contentAnalysisRequest =
+                new mozilla::contentanalysis::ContentAnalysisRequest(
+                    nsIContentAnalysisRequest::BULK_DATA_ENTRY, std::move(text),
+                    false, std::move(emptyDigest), std::move(requestingUrl),
+                    nsIContentAnalysisRequest::OPERATION_CLIPBOARD);
+
+            rv = contentAnalysis->AnalyzeContentRequest(
+                contentAnalysisRequest, true, aes.cx(),
+                &contentAnalysisPromise);
+            didContentAnalysis = true;
+            if (NS_SUCCEEDED(rv)) {
+              didContentAnalysis = true;
+              Maybe<bool> shouldAllowContent;
+              RefPtr<ContentAnalysisPromiseListener> listener =
+                  new ContentAnalysisPromiseListener(&shouldAllowContent,
+                                                     contentAnalysisPromise);
+              contentAnalysisPromise->AppendNativeHandler(listener);
+              SpinEventLoopUntil("TextEditor::HandlePaste"_ns,
+                                 [&shouldAllowContent]() -> bool {
+                                   return shouldAllowContent.isSome();
+                                 });
+              if (!*shouldAllowContent) {
+                // block the paste action because of content analysis
+                return NS_OK;
+              }
+            }
+          }
+        }
+      }
+    }
+    if (!didContentAnalysis) {
+      rv = clipboard->GetData(transferable, aClipboardType);
+    }
   }
 
   if (NS_FAILED(rv)) {
