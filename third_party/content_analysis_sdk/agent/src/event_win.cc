@@ -32,7 +32,10 @@ static DWORD WriteMessageToPipe(HANDLE pipe, const std::string& message) {
   DWORD err = ERROR_SUCCESS;
   const char* cursor = message.data();
   for (DWORD size = message.length(); size > 0;) {
+    std::cout << "[demo] WriteMessageToPipe top of loop, remaing size " << size
+              << std::endl;
     if (WriteFile(pipe, cursor, size, /*written=*/nullptr, overlapped)) {
+      std::cout << "[demo] WriteMessageToPipe: success" << std::endl;
       err = ERROR_SUCCESS;
       break;
     }
@@ -40,15 +43,22 @@ static DWORD WriteMessageToPipe(HANDLE pipe, const std::string& message) {
     // If an I/O is not pending, return the error.
     err = GetLastError();
     if (err != ERROR_IO_PENDING) {
+      std::cout << "[demo] WriteMessageToPipe: returning error from WriteFile "
+                << err << std::endl;
       break;
     }
 
     DWORD written;
     if (!GetOverlappedResult(pipe, overlapped, &written, /*wait=*/TRUE)) {
       err = GetLastError();
+      std::cout << "[demo] WriteMessageToPipe: returning error from "
+                   "GetOverlappedREsult "
+                << err << std::endl;
       break;
     }
 
+    std::cout << "[demo] WriteMessageToPipe: bottom of loop, wrote " << written
+              << std::endl;
     cursor += written;
     size -= written;
   }

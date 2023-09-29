@@ -465,7 +465,7 @@ ContentAnalysis::GetIsActive(bool* aIsActive) {
   }
 
   nsresult rv = EnsureContentAnalysisClient();
-  *aIsActive = SUCCEEDED(rv);
+  *aIsActive = NS_SUCCEEDED(rv);
   LOGD("Local DLP Content Analysis is %sactive", *aIsActive ? "" : "not ");
   return NS_OK;
 }
@@ -487,7 +487,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
   nsresult rv = NS_ERROR_FAILURE;
   auto promiseCopy = aPromise;
   auto se = MakeScopeExit([&] {
-    if (!SUCCEEDED(rv)) {
+    if (!NS_SUCCEEDED(rv)) {
       LOGD("RunAnalyzeRequestTask failed");
       promiseCopy->MaybeReject(rv);
     }
@@ -521,7 +521,7 @@ nsresult ContentAnalysis::RunAnalyzeRequestTask(
                   "ResolveOnMainThread",
                   [rv, owner, promiseHolder = std::move(promiseHolder),
                    pbResponse = std::move(pbResponse)]() mutable {
-                    if (SUCCEEDED(rv)) {
+                    if (NS_SUCCEEDED(rv)) {
                       LOGD("Content analysis resolving response promise");
                       RefPtr<ContentAnalysisResponse> response =
                           ContentAnalysisResponse::FromProtobuf(
@@ -582,7 +582,7 @@ ContentAnalysis::AnalyzeContentRequest(nsIContentAnalysisRequest* aRequest,
   NS_ENSURE_SUCCESS(rv, rv);
 
   rv = RunAnalyzeRequestTask(aRequest, promise);
-  if (SUCCEEDED(rv)) {
+  if (NS_SUCCEEDED(rv)) {
     promise.forget(aPromise);
   }
   return rv;
